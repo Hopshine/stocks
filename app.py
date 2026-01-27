@@ -392,10 +392,115 @@ def compare_page():
     return render_template('compare.html')
 
 
+# 调度器相关接口
+from src import get_scheduler
+
+@app.route('/api/scheduler/status')
+def api_scheduler_status():
+    """获取调度器状态"""
+    try:
+        scheduler = get_scheduler(auto_start=False)
+        status = scheduler.get_status()
+        return jsonify({'success': True, 'data': status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/scheduler/start', methods=['POST'])
+def api_scheduler_start():
+    """启动调度器"""
+    try:
+        scheduler = get_scheduler(auto_start=False)
+        if scheduler.running:
+            return jsonify({'success': False, 'message': '调度器已在运行中'})
+        
+        scheduler.start()
+        return jsonify({
+            'success': True,
+            'message': '调度器已启动',
+            'data': scheduler.get_status()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/scheduler/stop', methods=['POST'])
+def api_scheduler_stop():
+    """停止调度器"""
+    try:
+        scheduler = get_scheduler(auto_start=False)
+        if not scheduler.running:
+            return jsonify({'success': False, 'message': '调度器未运行'})
+        
+        scheduler.stop()
+        return jsonify({
+            'success': True,
+            'message': '调度器已停止',
+            'data': scheduler.get_status()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/scheduler/sync', methods=['POST'])
+def api_scheduler_sync():
+    """手动触发同步任务"""
+    try:
+        data = request.json or {}
+        task_type = data.get('type', 'all')
+        
+        scheduler = get_scheduler(auto_start=False)
+        result = scheduler.trigger_sync(task_type)
+        
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/sync/logs')
+def api_sync_logs():
+    """获取同步日志"""
+    try:
+        import os
+        from pathlib import Path
+        
+        log_file = Path('logs/sync.log')
+        if not log_file.exists():
+            return jsonify({'success': False, 'error': '日志文件不存在'})
+        
+        # 读取最近100行
+        lines = []
+        with open(log_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()[-100:]
+        
+        return jsonify({
+            'success': True,
+            'logs': [line.strip() for line in lines]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 if __name__ == '__main__':
+    # 启动时自动启动调度器
     print("=" * 60)
     print("A股分析系统 - Web服务器")
     print("=" * 60)
     print("访问地址: http://127.0.0.1:5000")
+    print("=" * 60)
+    
+    # 启动后台调度器
+    print("\n🚀 正在启动后台数据同步调度器...")
+    try:
+        scheduler = get_scheduler(auto_start=True)
+        print("✅ 调度器启动成功！")
+        print(f"   股票列表更新间隔: {scheduler.config['stock_list_interval_hours']} 小时")
+        print(f"   实时行情更新间隔: {scheduler.config['market_data_interval_minutes']} 分钟")
+        print(f"   指数数据更新间隔: {scheduler.config['index_data_interval_minutes']} 分钟")
+    except Exception as e:
+        print(f"⚠️  调度器启动失败: {e}")
+    
     print("=" * 60)
     app.run(debug=True, host='0.0.0.0', port=5000)
