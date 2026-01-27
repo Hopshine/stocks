@@ -287,6 +287,84 @@ class BaoStockDataFetcher:
             traceback.print_exc()
             return {}
     
+    def get_batch_index_data(self, codes: list) -> dict:
+        """
+        批量获取指数数据
+        
+        Args:
+            codes: 指数代码列表 (如: ['000001', '000300'])
+            
+        Returns:
+            字典，key为指数代码，value为行情数据
+        """
+        try:
+            result = {}
+            
+            if not codes:
+                return result
+            
+            # 从今天开始往前查找最近的交易日
+            for i in range(30):
+                date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                
+                for code in codes:
+                    if code in result:
+                        continue
+                    
+                    # 标准化代码格式
+                    code_with_prefix = code
+                    if '.' not in code:
+                        if code.startswith('000') or code.startswith('399'):
+                            code_with_prefix = f'sz.{code}'
+                        elif code.startswith('sh.'):
+                            code_with_prefix = code
+                        else:
+                            code_with_prefix = f'sh.{code}'
+                    
+                    # 尝试从缓存获取
+                    if self.enable_cache and self.cache:
+                        cached_data = self.cache.get_spot_data(f"index_{code}", max_age_hours=1)
+                        if cached_data is not None:
+                            result[code] = cached_data
+                            continue
+                    
+                    rs = bs.query_history_k_data_plus(
+                        code_with_prefix,
+                        "date,code,open,high,low,close,volume,amount,pctChg",
+                        start_date=date,
+                        end_date=date,
+                        frequency="d",
+                        adjustflag="3"
+                    )
+                    
+                    if rs.error_code != '0':
+                        continue
+                    
+                    data_list = []
+                    while (rs.error_code == '0') & rs.next():
+                        data_list.append(rs.get_row_data())
+                    
+                    if data_list:
+                        df = pd.DataFrame(data_list, columns=rs.fields)
+                        index_data = df.iloc[0].to_dict()
+                        result[code] = index_data
+                        
+                        # 保存到缓存
+                        if self.enable_cache and self.cache:
+                            self.cache.save_spot_data(f"index_{code}", index_data)
+                
+                # 如果所有指数都获取到了数据，提前退出
+                if len(result) == len(codes):
+                    break
+            
+            return result
+            
+        except Exception as e:
+            print(f"批量获取指数数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
+    
     def get_historical_data(
         self,
         code: str,
