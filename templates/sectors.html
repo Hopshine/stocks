@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}行业板块 - A股分析系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary mb-0">
+            <i class="bi bi-grid me-2"></i>行业板块
+        </h2>
+        <p class="text-muted">查看各行业板块涨跌情况</p>
+    </div>
+</div>
+
+<!-- Market Summary -->
+<div class="row mb-4" id="marketSummary">
+    <div class="col-md-4 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-danger" id="topSector">-</div>
+            <div class="metric-label">涨幅最大板块</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-success" id="bottomSector">-</div>
+            <div class="metric-label">跌幅最大板块</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-primary" id="sectorCount">-</div>
+            <div class="metric-label">板块数量</div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="row loading" id="loadingSection">
+    <div class="col-12 text-center">
+        <div class="spinner mb-3"></div>
+        <p class="text-muted">正在加载数据...</p>
+    </div>
+</div>
+
+<!-- Sectors Table -->
+<div class="row" id="resultsSection" style="display: none;">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-trophy me-2"></i>涨幅排行</span>
+                <span class="badge bg-primary">TOP 20</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>板块名称</th>
+                                <th>涨跌幅</th>
+                                <th>领涨股</th>
+                                <th>领涨股涨幅</th>
+                                <th>总市值</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gainersBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-down-circle me-2"></i>跌幅排行</span>
+                <span class="badge bg-danger">BOTTOM 20</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>板块名称</th>
+                                <th>涨跌幅</th>
+                                <th>领涨股</th>
+                                <th>领涨股涨幅</th>
+                                <th>总市值</th>
+                            </tr>
+                        </thead>
+                        <tbody id="losersBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Refresh Button -->
+<div class="row">
+    <div class="col-12 text-center">
+        <button class="btn btn-primary btn-lg" onclick="refreshData()">
+            <i class="bi bi-arrow-clockwise me-2"></i>刷新数据
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadSectors();
+});
+
+async function loadSectors() {
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/sectors');
+        const result = await response.json();
+        
+        if (result.success) {
+            displaySectors(result.data);
+        } else {
+            alert(result.error || '获取数据失败');
+        }
+    } catch (error) {
+        console.error('Failed to load sectors:', error);
+        alert('加载失败，请重试');
+    } finally {
+        document.getElementById('loadingSection').style.display = 'none';
+    }
+}
+
+function displaySectors(sectors) {
+    if (sectors.length === 0) {
+        return;
+    }
+    
+    // Sort by change_pct
+    const sorted = [...sectors].sort((a, b) => (b['涨跌幅'] || 0) - (a['涨跌幅'] || 0));
+    const gainers = sorted.slice(0, 20);
+    const losers = sorted.slice(-20).reverse();
+    
+    // Update summary
+    document.getElementById('topSector').textContent = gainers[0]['板块名称'];
+    document.getElementById('bottomSector').textContent = losers[0]['板块名称'];
+    document.getElementById('sectorCount').textContent = sectors.length;
+    
+    // Gainers table
+    const gainersHtml = gainers.map((s, i) => `
+        <tr>
+            <td><span class="badge bg-primary">${i + 1}</span></td>
+            <td>${s['板块名称']}</td>
+            <td class="up">+${(s['涨跌幅'] || 0).toFixed(2)}%</td>
+            <td>${s['领涨股'] || '-'}</td>
+            <td class="up">+${(s['领涨股涨幅'] || 0).toFixed(2)}%</td>
+            <td>${s['总市值'] || '-'}</td>
+        </tr>
+    `).join('');
+    document.getElementById('gainersBody').innerHTML = gainersHtml;
+    
+    // Losers table
+    const losersHtml = losers.map((s, i) => `
+        <tr>
+            <td><span class="badge bg-danger">${i + 1}</span></td>
+            <td>${s['板块名称']}</td>
+            <td class="down">${(s['涨跌幅'] || 0).toFixed(2)}%</td>
+            <td>${s['领涨股'] || '-'}</td>
+            <td class="down">${(s['领涨股涨幅'] || 0).toFixed(2)}%</td>
+            <td>${s['总市值'] || '-'}</td>
+        </tr>
+    `).join('');
+    document.getElementById('losersBody').innerHTML = losersHtml;
+    
+    // Show results
+    document.getElementById('resultsSection').style.display = 'flex';
+}
+
+function refreshData() {
+    loadSectors();
+}
+</script>
+{% endblock %}

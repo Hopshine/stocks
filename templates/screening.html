@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}智能选股 - A股分析系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary mb-0">
+            <i class="bi bi-funnel me-2"></i>智能选股
+        </h2>
+        <p class="text-muted">使用多种策略筛选股票</p>
+    </div>
+</div>
+
+<!-- Strategy Selection -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">选择选股策略</div>
+            <div class="card-body">
+                <select class="form-select form-select-lg mb-3" id="strategySelect" onchange="showStrategyOptions()">
+                    <option value="macd">MACD金叉策略</option>
+                    <option value="rsi">RSI超卖策略</option>
+                    <option value="golden_cross">均线金叉策略</option>
+                    <option value="volume">放量突破策略</option>
+                    <option value="multi" selected>多指标综合策略</option>
+                    <option value="fundamental">基本面选股策略</option>
+                </select>
+                
+                <!-- Strategy Options -->
+                <div id="strategyOptions" class="border rounded p-3 mb-3">
+                    <!-- Options will be loaded dynamically -->
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">分析股票数量</label>
+                        <input type="number" class="form-control" id="stockLimit" value="200" min="50" max="500">
+                        <small class="text-muted">数值越大分析越慢</small>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary w-100" onclick="runScreening()">
+                    <i class="bi bi-play-circle me-2"></i>开始选股
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">策略说明</div>
+            <div class="card-body" id="strategyDescription">
+                <!-- Description will be loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="row loading" id="loadingSection">
+    <div class="col-12 text-center">
+        <div class="spinner mb-3"></div>
+        <p class="text-muted">正在筛选股票，请稍候...</p>
+        <small class="text-muted">分析可能需要几分钟时间</small>
+    </div>
+</div>
+
+<!-- Results -->
+<div class="row" id="resultsSection" style="display: none;">
+    <div class="col-12 mb-3">
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            <span id="resultSummary">筛选完成</span>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list me-2"></i>选股结果</span>
+                <span class="badge bg-primary" id="resultCount">0 只股票</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>价格</th>
+                                <th>综合评分</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="noResults" class="text-center py-5" style="display: none;">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">未找到符合条件的股票</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const strategyDescriptions = {
+    'macd': {
+        title: 'MACD金叉策略',
+        desc: '筛选MACD指标出现金叉的股票（MACD线上穿Signal线），表示短期动能增强，可能出现买入机会。',
+        options: ''
+    },
+    'rsi': {
+        title: 'RSI超卖策略',
+        desc: '筛选RSI指标处于超卖区域的股票（RSI < 阈值），表示股票可能被低估，存在反弹机会。',
+        options: `
+            <div class="mb-3">
+                <label class="form-label">RSI阈值</label>
+                <input type="number" class="form-control" id="rsiThreshold" value="30" min="10" max="50">
+                <small class="text-muted">低于此值的视为超卖</small>
+            </div>
+        `
+    },
+    'golden_cross': {
+        title: '均线金叉策略',
+        desc: '筛选短期均线上穿长期均线的股票，表示趋势由空转多。',
+        options: `
+            <div class="row">
+                <div class="col-6">
+                    <label class="form-label">短期均线</label>
+                    <input type="number" class="form-control" id="shortMA" value="5" min="3" max="30">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">长期均线</label>
+                    <input type="number" class="form-control" id="longMA" value="20" min="10" max="120">
+                </div>
+            </div>
+        `
+    },
+    'volume': {
+        title: '放量突破策略',
+        desc: '筛选成交量显著放大且价格上涨的股票，表示资金流入明显，可能形成突破。',
+        options: `
+            <div class="mb-3">
+                <label class="form-label">成交量放大倍数</label>
+                <input type="number" class="form-control" id="volumeRatio" value="2.0" min="1.5" max="5.0" step="0.5">
+                <small class="text-muted">相对于20日均量的倍数</small>
+            </div>
+        `
+    },
+    'multi': {
+        title: '多指标综合策略',
+        desc: '综合MACD、RSI、布林带、成交量、均线排列等多个指标，计算综合评分，筛选出技术指标共振的股票。',
+        options: '<p class="text-muted mb-0">无需设置参数，系统自动分析</p>'
+    },
+    'fundamental': {
+        title: '基本面选股策略',
+        desc: '基于PE、PB、市值等基本面指标进行筛选，适合价值投资者。',
+        options: `
+            <div class="row">
+                <div class="col-4">
+                    <label class="form-label">最大PE</label>
+                    <input type="number" class="form-control" id="maxPE" value="30" min="0">
+                </div>
+                <div class="col-4">
+                    <label class="form-label">最大PB</label>
+                    <input type="number" class="form-control" id="maxPB" value="3" min="0">
+                </div>
+                <div class="col-4">
+                    <label class="form-label">最小市值(亿)</label>
+                    <input type="number" class="form-control" id="minCap" value="100" min="0">
+                </div>
+            </div>
+            <small class="text-muted">输入0表示不限</small>
+        `
+    }
+};
+
+function showStrategyOptions() {
+    const strategy = document.getElementById('strategySelect').value;
+    const info = strategyDescriptions[strategy];
+    
+    // Update options
+    document.getElementById('strategyOptions').innerHTML = info.options;
+    
+    // Update description
+    document.getElementById('strategyDescription').innerHTML = `
+        <h5 class="mb-3">${info.title}</h5>
+        <p class="text-muted">${info.desc}</p>
+    `;
+}
+
+async function runScreening() {
+    const strategy = document.getElementById('strategySelect').value;
+    const limit = parseInt(document.getElementById('stockLimit').value);
+    
+    // Get strategy parameters
+    const params = { strategy: strategy, limit: limit };
+    
+    if (strategy === 'rsi') {
+        params.threshold = parseFloat(document.getElementById('rsiThreshold').value);
+    } else if (strategy === 'golden_cross') {
+        params.short_ma = parseInt(document.getElementById('shortMA').value);
+        params.long_ma = parseInt(document.getElementById('longMA').value);
+    } else if (strategy === 'volume') {
+        params.ratio = parseFloat(document.getElementById('volumeRatio').value);
+    } else if (strategy === 'fundamental') {
+        params.max_pe = parseFloat(document.getElementById('maxPE').value);
+        params.max_pb = parseFloat(document.getElementById('maxPB').value);
+        params.min_cap = parseFloat(document.getElementById('minCap').value);
+    }
+    
+    // Show loading
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/screening', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayResults(result);
+        } else {
+            alert(result.error || '选股失败');
+        }
+    } catch (error) {
+        console.error('Screening failed:', error);
+        alert('选股失败，请重试');
+    } finally {
+        document.getElementById('loadingSection').style.display = 'none';
+    }
+}
+
+function displayResults(result) {
+    const strategy = document.getElementById('strategySelect').value;
+    const info = strategyDescriptions[strategy];
+    
+    // Update summary
+    document.getElementById('resultSummary').innerHTML = 
+        `<strong>${info.title}</strong> 筛选完成，共找到 ${result.count} 只符合条件的股票`;
+    document.getElementById('resultCount').textContent = `${result.count} 只股票`;
+    
+    // Update table
+    const tbody = document.getElementById('resultsBody');
+    const table = document.getElementById('resultsTable');
+    const noResults = document.getElementById('noResults');
+    
+    if (result.count === 0) {
+        table.style.display = 'none';
+        noResults.style.display = 'block';
+    } else {
+        table.style.display = 'table';
+        noResults.style.display = 'none';
+        
+        // Show score column only for multi strategy
+        const showScore = strategy === 'multi';
+        document.querySelector('#resultsTable th:nth-child(4)').style.display = showScore ? '' : 'none';
+        
+        tbody.innerHTML = result.data.map(stock => `
+            <tr>
+                <td><a href="/stock/${stock.code}" class="text-decoration-none">${stock.code}</a></td>
+                <td>${stock.name}</td>
+                <td>${stock.price?.toFixed(2) || '-'}</td>
+                <td style="display: ${showScore ? '' : 'none'}">
+                    <span class="badge ${getScoreBadge(stock.score)}">${stock.score || '-'}</span>
+                </td>
+                <td>
+                    <a href="/stock/${stock.code}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i>详情
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    // Show results
+    document.getElementById('resultsSection').style.display = 'flex';
+}
+
+function getScoreBadge(score) {
+    if (score >= 80) return 'bg-success';
+    if (score >= 70) return 'bg-primary';
+    if (score >= 60) return 'bg-warning';
+    return 'bg-secondary';
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', showStrategyOptions);
+</script>
+{% endblock %}

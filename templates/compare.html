@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}股票对比 - A股分析系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary mb-0">
+            <i class="bi bi-bar-chart-line me-2"></i>股票对比
+        </h2>
+        <p class="text-muted">比较多只股票的表现</p>
+    </div>
+</div>
+
+<!-- Stock Selection -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle me-2"></i>选择股票
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="stockInput" 
+                           placeholder="输入股票代码 (如: 000001)" maxlength="6">
+                    <button class="btn btn-primary" type="button" onclick="addStock()">
+                        <i class="bi bi-plus-lg me-1"></i>添加
+                    </button>
+                </div>
+                <small class="text-muted">最多可对比5只股票</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-list me-2"></i>已选择股票
+            </div>
+            <div class="card-body">
+                <ul class="list-group" id="stockList">
+                    <li class="list-group-item text-muted" id="emptyList">暂无股票</li>
+                </ul>
+                <button class="btn btn-success w-100 mt-3" onclick="compareStocks()" id="compareBtn" disabled>
+                    <i class="bi bi-play-circle me-2"></i>开始对比
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="row loading" id="loadingSection">
+    <div class="col-12 text-center">
+        <div class="spinner mb-3"></div>
+        <p class="text-muted">正在加载数据...</p>
+    </div>
+</div>
+
+<!-- Results -->
+<div class="row" id="resultsSection" style="display: none;">
+    <div class="col-12 mb-4">
+        <div class="chart-container">
+            <h5 class="mb-3">
+                <i class="bi bi-graph-up me-2"></i>收益对比图
+                <div class="btn-group btn-group-sm float-end">
+                    <button class="btn btn-outline-secondary" onclick="loadChart(30)">30天</button>
+                    <button class="btn btn-outline-secondary active" onclick="loadChart(60)">60天</button>
+                    <button class="btn btn-outline-secondary" onclick="loadChart(90)">90天</button>
+                </div>
+            </h5>
+            <img id="chartImage" src="" alt="对比图" class="img-fluid" style="display: none;">
+            <div id="chartPlaceholder" class="text-center text-muted py-5">
+                <div class="spinner mb-3"></div>
+                <p>加载图表中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-table me-2"></i>对比数据
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="compareTable">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>最新价格</th>
+                                <th>涨跌幅</th>
+                                <th>成交量</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compareBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Button -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <button class="btn btn-outline-danger" onclick="clearAll()">
+            <i class="bi bi-trash me-2"></i>清空列表
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let stockCodes = [];
+let currentDays = 60;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Load from localStorage if exists
+    const saved = localStorage.getItem('compareList');
+    if (saved) {
+        stockCodes = JSON.parse(saved);
+        updateStockList();
+    }
+    
+    // Handle enter key
+    document.getElementById('stockInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') addStock();
+    });
+});
+
+function addStock() {
+    const input = document.getElementById('stockInput');
+    const code = input.value.trim();
+    
+    if (!code) return;
+    
+    if (stockCodes.includes(code)) {
+        alert('该股票已在列表中');
+        return;
+    }
+    
+    if (stockCodes.length >= 5) {
+        alert('最多只能对比5只股票');
+        return;
+    }
+    
+    stockCodes.push(code);
+    input.value = '';
+    updateStockList();
+    
+    // Save to localStorage
+    localStorage.setItem('compareList', JSON.stringify(stockCodes));
+}
+
+function removeStock(index) {
+    stockCodes.splice(index, 1);
+    updateStockList();
+    localStorage.setItem('compareList', JSON.stringify(stockCodes));
+}
+
+function updateStockList() {
+    const list = document.getElementById('stockList');
+    const emptyList = document.getElementById('emptyList');
+    const compareBtn = document.getElementById('compareBtn');
+    
+    if (stockCodes.length === 0) {
+        list.innerHTML = '<li class="list-group-item text-muted">暂无股票</li>';
+        compareBtn.disabled = true;
+    } else {
+        list.innerHTML = stockCodes.map((code, i) => `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <a href="/stock/${code}" class="text-decoration-none">${code}</a>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeStock(${i})">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </li>
+        `).join('');
+        compareBtn.disabled = false;
+    }
+}
+
+async function compareStocks() {
+    if (stockCodes.length < 2) {
+        alert('请至少选择2只股票进行对比');
+        return;
+    }
+    
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+    
+    try {
+        // Load chart
+        await loadChart(currentDays);
+        
+        // Load data for table
+        await loadCompareData();
+        
+        document.getElementById('resultsSection').style.display = 'flex';
+    } catch (error) {
+        console.error('Compare failed:', error);
+        alert('加载失败，请重试');
+    } finally {
+        document.getElementById('loadingSection').style.display = 'none';
+    }
+}
+
+async function loadChart(days) {
+    currentDays = days;
+    
+    // Update button states
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.includes(days + '天')) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Generate chart for first stock
+    if (stockCodes.length > 0) {
+        const response = await fetch(`/api/chart/${stockCodes[0]}?days=${days}&type=technical`);
+        const result = await response.json();
+        
+        if (result.success && result.chart) {
+            document.getElementById('chartImage').src = 'data:image/png;base64,' + result.chart;
+            document.getElementById('chartImage').style.display = 'block';
+            document.getElementById('chartPlaceholder').style.display = 'none';
+        }
+    }
+}
+
+async function loadCompareData() {
+    const tbody = document.getElementById('compareBody');
+    const rows = [];
+    
+    for (const code of stockCodes) {
+        try {
+            const response = await fetch(`/api/stock_info/${code}`);
+            const result = await response.json();
+            
+            if (result.success) {
+                const spot = result.spot;
+                rows.push(`
+                    <tr>
+                        <td><a href="/stock/${code}" class="text-decoration-none">${code}</a></td>
+                        <td>${spot?.['最新价'] || '-'}</td>
+                        <td class="${(spot?.['涨跌幅'] || 0) > 0 ? 'up' : 'down'}">
+                            ${(spot?.['涨跌幅'] || 0).toFixed(2)}%
+                        </td>
+                        <td>${spot?.['成交量'] ? parseInt(spot['成交量']).toLocaleString() : '-'}</td>
+                        <td>
+                            <a href="/stock/${code}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye me-1"></i>详情
+                            </a>
+                        </td>
+                    </tr>
+                `);
+            }
+        } catch (error) {
+            console.error(`Failed to load ${code}:`, error);
+        }
+    }
+    
+    tbody.innerHTML = rows.join('');
+}
+
+function clearAll() {
+    stockCodes = [];
+    updateStockList();
+    localStorage.removeItem('compareList');
+    document.getElementById('resultsSection').style.display = 'none';
+}
+</script>
+{% endblock %}

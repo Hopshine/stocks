@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="row mb-5">
+    <div class="col-12 text-center py-5">
+        <h1 class="display-4 fw-bold text-primary mb-3">
+            <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
+        </h1>
+        <p class="lead text-muted mb-4">专业的股票数据分析与选股工具</p>
+        <div class="search-box mx-auto" style="max-width: 600px;">
+            <i class="bi bi-search"></i>
+            <input type="text" class="form-control form-control-lg" id="searchInput" 
+                   placeholder="输入股票代码或名称 (如: 000001)" onkeypress="handleEnter(event)">
+        </div>
+        <button class="btn btn-primary btn-lg mt-3" onclick="searchStock()">
+            <i class="bi bi-search me-2"></i>查询股票
+        </button>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-5">
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-primary" id="totalStocks">-</div>
+            <div class="metric-label">股票总数</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-success" id="upCount">-</div>
+            <div class="metric-label">上涨家数</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-danger" id="downCount">-</div>
+            <div class="metric-label">下跌家数</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-warning" id="avgChange">-</div>
+            <div class="metric-label">平均涨幅</div>
+        </div>
+    </div>
+</div>
+
+<!-- Market Overview -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-trophy me-2"></i>涨幅排行</span>
+                <span class="badge bg-light text-dark">TOP 10</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>价格</th>
+                                <th>涨跌幅</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topGainers">
+                            <tr><td colspan="4" class="text-center py-4">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-down-circle me-2"></i>跌幅排行</span>
+                <span class="badge bg-light text-dark">TOP 10</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>价格</th>
+                                <th>涨跌幅</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topLosers">
+                            <tr><td colspan="4" class="text-center py-4">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightning me-2"></i>快捷操作
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <a href="/analysis" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="bi bi-graph-up mb-2 d-block fs-2"></i>
+                            技术分析
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/screening" class="btn btn-outline-success btn-lg w-100">
+                            <i class="bi bi-funnel mb-2 d-block fs-2"></i>
+                            智能选股
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/sectors" class="btn btn-outline-info btn-lg w-100">
+                            <i class="bi bi-grid mb-2 d-block fs-2"></i>
+                            行业板块
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/compare" class="btn btn-outline-warning btn-lg w-100">
+                            <i class="bi bi-bar-chart-line mb-2 d-block fs-2"></i>
+                            股票对比
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load market data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadMarketData();
+});
+
+function handleEnter(event) {
+    if (event.key === 'Enter') {
+        searchStock();
+    }
+}
+
+function searchStock() {
+    const code = document.getElementById('searchInput').value.trim();
+    if (code) {
+        window.location.href = `/stock/${code}`;
+    }
+}
+
+async function loadMarketData() {
+    try {
+        const response = await fetch('/api/stock_list');
+        const result = await response.json();
+        
+        if (result.success) {
+            const stocks = result.data;
+            
+            // Update stats
+            document.getElementById('totalStocks').textContent = stocks.length;
+            
+            const upStocks = stocks.filter(s => s.change_pct > 0);
+            const downStocks = stocks.filter(s => s.change_pct < 0);
+            
+            document.getElementById('upCount').textContent = upStocks.length;
+            document.getElementById('downCount').textContent = downStocks.length;
+            
+            const avgChange = stocks.reduce((sum, s) => sum + (s.change_pct || 0), 0) / stocks.length;
+            const avgChangeElem = document.getElementById('avgChange');
+            avgChangeElem.textContent = (avgChange > 0 ? '+' : '') + avgChange.toFixed(2) + '%';
+            avgChangeElem.className = avgChange >= 0 ? 'metric-value text-danger' : 'metric-value text-success';
+            
+            // Top gainers
+            const gainers = [...stocks].sort((a, b) => b.change_pct - a.change_pct).slice(0, 10);
+            const gainersHtml = gainers.map(s => `
+                <tr>
+                    <td><a href="/stock/${s.code}" class="text-decoration-none">${s.code}</a></td>
+                    <td>${s.name}</td>
+                    <td>${s.price?.toFixed(2) || '-'}</td>
+                    <td class="up">+${s.change_pct?.toFixed(2) || '-'}%</td>
+                </tr>
+            `).join('');
+            document.getElementById('topGainers').innerHTML = gainersHtml;
+            
+            // Top losers
+            const losers = [...stocks].sort((a, b) => a.change_pct - b.change_pct).slice(0, 10);
+            const losersHtml = losers.map(s => `
+                <tr>
+                    <td><a href="/stock/${s.code}" class="text-decoration-none">${s.code}</a></td>
+                    <td>${s.name}</td>
+                    <td>${s.price?.toFixed(2) || '-'}</td>
+                    <td class="down">${s.change_pct?.toFixed(2) || '-'}%</td>
+                </tr>
+            `).join('');
+            document.getElementById('topLosers').innerHTML = losersHtml;
+        }
+    } catch (error) {
+        console.error('Failed to load market data:', error);
+    }
+}
+</script>
+{% endblock %}

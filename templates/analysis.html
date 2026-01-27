@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}技术分析 - A股分析系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-primary mb-0">
+            <i class="bi bi-graph-up me-2"></i>技术分析
+        </h2>
+        <p class="text-muted">输入股票代码进行技术指标分析</p>
+    </div>
+</div>
+
+<!-- Search Section -->
+<div class="row mb-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">股票查询</div>
+            <div class="card-body">
+                <div class="input-group input-group-lg">
+                    <input type="text" class="form-control" id="stockCode" 
+                           placeholder="输入股票代码 (如: 000001)" maxlength="6">
+                    <select class="form-select" style="max-width: 150px;" id="daysSelect">
+                        <option value="30">30天</option>
+                        <option value="60" selected>60天</option>
+                        <option value="90">90天</option>
+                        <option value="180">180天</option>
+                        <option value="365">1年</option>
+                    </select>
+                    <button class="btn btn-primary" type="button" onclick="analyzeStock()">
+                        <i class="bi bi-search me-1"></i>分析
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading -->
+<div class="row loading" id="loadingSection">
+    <div class="col-12">
+        <div class="spinner mb-3"></div>
+        <p class="text-muted">正在分析中...</p>
+    </div>
+</div>
+
+<!-- Results -->
+<div class="row" id="resultsSection" style="display: none;">
+    <!-- Stock Info -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>股票信息
+                <span class="float-end" id="stockTitle">-</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card border-left-success">
+                            <div class="metric-value text-success" id="currentPrice">-</div>
+                            <div class="metric-label">当前价格</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card border-left-info">
+                            <div class="metric-value" id="changePct">-</div>
+                            <div class="metric-label">涨跌幅</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card border-left-primary">
+                            <div class="metric-value text-primary" id="volume">-</div>
+                            <div class="metric-label">成交量</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card border-left-warning">
+                            <div class="metric-value text-warning" id="totalChange">-</div>
+                            <div class="metric-label">5日涨跌</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technical Indicators -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-speedometer2 me-2"></i>技术指标
+            </div>
+            <div class="card-body">
+                <div id="indicatorsList">
+                    <!-- Indicators will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signals -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-lightbulb me-2"></i>交易信号
+            </div>
+            <div class="card-body">
+                <div id="signalsList">
+                    <!-- Signals will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="col-12 mb-4">
+        <div class="chart-container">
+            <h5 class="mb-3"><i class="bi bi-graph-up me-2"></i>价格走势图</h5>
+            <img id="chartImage" src="" alt="价格走势图" class="img-fluid" style="display: none;">
+            <div id="chartPlaceholder" class="text-center text-muted py-5">
+                <i class="bi bi-image fs-1"></i>
+                <p class="mt-2">图表加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Volume Chart -->
+    <div class="col-12 mb-4">
+        <div class="chart-container">
+            <h5 class="mb-3"><i class="bi bi-bar-chart me-2"></i>成交量图</h5>
+            <img id="volumeChartImage" src="" alt="成交量图" class="img-fluid" style="display: none;">
+            <div id="volumeChartPlaceholder" class="text-center text-muted py-5">
+                <i class="bi bi-image fs-1"></i>
+                <p class="mt-2">图表加载中...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function handleEnter(event) {
+    if (event.key === 'Enter') {
+        analyzeStock();
+    }
+}
+
+async function analyzeStock() {
+    const code = document.getElementById('stockCode').value.trim();
+    const days = document.getElementById('daysSelect').value;
+    
+    if (!code) {
+        alert('请输入股票代码');
+        return;
+    }
+    
+    // Show loading
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+    
+    try {
+        // Fetch stock info
+        const infoResponse = await fetch(`/api/stock_info/${code}`);
+        const infoData = await infoResponse.json();
+        
+        // Fetch technical analysis
+        const techResponse = await fetch(`/api/technical_analysis/${code}?days=${days}`);
+        const techData = await techResponse.json();
+        
+        // Fetch charts
+        const chartResponse = await fetch(`/api/chart/${code}?days=${days}&type=technical`);
+        const chartData = await chartResponse.json();
+        
+        const volumeChartResponse = await fetch(`/api/chart/${code}?days=${days}&type=volume`);
+        const volumeChartData = await volumeChartResponse.json();
+        
+        if (infoData.success && techData.success && chartData.success && volumeChartData.success) {
+            displayResults(infoData, techData, chartData, volumeChartData, code);
+        } else {
+            const error = infoData.error || techData.error || chartData.error || '获取数据失败';
+            alert(error);
+        }
+    } catch (error) {
+        console.error('Analysis failed:', error);
+        alert('分析失败，请重试');
+    } finally {
+        document.getElementById('loadingSection').style.display = 'none';
+    }
+}
+
+function displayResults(infoData, techData, chartData, volumeChartData, code) {
+    const info = infoData;
+    const signals = techData.signals;
+    
+    // Update stock info
+    document.getElementById('stockTitle').textContent = `${code} - ${info.spot?.['股票名称'] || ''}`;
+    document.getElementById('currentPrice').textContent = info.spot?.['最新价'] || '-';
+    
+    const changePct = info.spot?.['涨跌幅'] || '-';
+    const changeElem = document.getElementById('changePct');
+    changeElem.textContent = changePct + '%';
+    changeElem.className = changePct > 0 ? 'metric-value text-danger' : 
+                          changePct < 0 ? 'metric-value text-success' : 'metric-value';
+    
+    document.getElementById('volume').textContent = info.spot?.['成交量'] ? 
+        parseInt(info.spot['成交量']).toLocaleString() : '-';
+    document.getElementById('totalChange').textContent = (info.stats?.total_change_5d || 0).toFixed(2) + '%';
+    
+    // Display indicators
+    const indicatorsHtml = `
+        <div class="row">
+            <div class="col-6 mb-3">
+                <div class="d-flex justify-content-between">
+                    <span>MA5</span>
+                    <strong>${signals.ma5?.toFixed(2) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>MA10</span>
+                    <strong>${signals.ma10?.toFixed(2) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>MA20</span>
+                    <strong>${signals.ma20?.toFixed(2) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>MA60</span>
+                    <strong>${signals.ma60?.toFixed(2) || '-'}</strong>
+                </div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="d-flex justify-content-between">
+                    <span>RSI</span>
+                    <strong>${signals.rsi?.toFixed(2) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>MACD</span>
+                    <strong>${signals.macd?.toFixed(4) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>K</span>
+                    <strong>${signals.k?.toFixed(2) || '-'}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>D</span>
+                    <strong>${signals.d?.toFixed(2) || '-'}</strong>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('indicatorsList').innerHTML = indicatorsHtml;
+    
+    // Display signals
+    const signalClass = {
+        'BUY': 'signal-buy',
+        'SELL': 'signal-sell',
+        'NEUTRAL': 'signal-neutral',
+        'OVERBOUGHT': 'signal-buy',
+        'OVERSOLD': 'signal-sell',
+        'GOLDEN_CROSS': 'signal-buy',
+        'DEAD_CROSS': 'signal-sell',
+        'UP': 'signal-buy',
+        'DOWN': 'signal-sell'
+    };
+    
+    const signalsHtml = `
+        <div class="mb-3">
+            <span class="me-2">MACD信号:</span>
+            <span class="badge badge-custom ${signalClass[signals.macd_signal] || 'signal-neutral'}">
+                ${signals.macd_signal || '中性'}
+            </span>
+        </div>
+        <div class="mb-3">
+            <span class="me-2">RSI信号:</span>
+            <span class="badge badge-custom ${signalClass[signals.rsi_signal] || 'signal-neutral'}">
+                ${signals.rsi_signal || '中性'}
+            </span>
+        </div>
+        <div class="mb-3">
+            <span class="me-2">KDJ信号:</span>
+            <span class="badge badge-custom ${signalClass[signals.kdj_signal] || 'signal-neutral'}">
+                ${signals.kdj_signal || '中性'}
+            </span>
+        </div>
+        <div class="mb-3">
+            <span class="me-2">趋势信号:</span>
+            <span class="badge badge-custom ${signalClass[signals.trend] || 'signal-neutral'}">
+                ${signals.trend || '中性'}
+            </span>
+        </div>
+    `;
+    document.getElementById('signalsList').innerHTML = signalsHtml;
+    
+    // Display charts
+    if (chartData.chart) {
+        document.getElementById('chartImage').src = 'data:image/png;base64,' + chartData.chart;
+        document.getElementById('chartImage').style.display = 'block';
+        document.getElementById('chartPlaceholder').style.display = 'none';
+    }
+    
+    if (volumeChartData.chart) {
+        document.getElementById('volumeChartImage').src = 'data:image/png;base64,' + volumeChartData.chart;
+        document.getElementById('volumeChartImage').style.display = 'block';
+        document.getElementById('volumeChartPlaceholder').style.display = 'none';
+    }
+    
+    // Show results
+    document.getElementById('resultsSection').style.display = 'flex';
+}
+
+// Add enter key support
+document.getElementById('stockCode').addEventListener('keypress', handleEnter);
+</script>
+{% endblock %}

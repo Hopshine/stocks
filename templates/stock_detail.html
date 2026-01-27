@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}股票详情 - {{ code }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">首页</a></li>
+                <li class="breadcrumb-item active">{{ code }}</li>
+            </ol>
+        </nav>
+        <h2 class="text-primary mb-0">
+            <i class="bi bi-graph-up me-2"></i>{{ code }}
+            <small class="text-muted fs-5" id="stockName">加载中...</small>
+        </h2>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" onclick="analyzeStock()">
+                <i class="bi bi-graph-up me-2"></i>技术分析
+            </button>
+            <button class="btn btn-outline-success" onclick="addToCompare()">
+                <i class="bi bi-bar-chart-line me-2"></i>加入对比
+            </button>
+            <button class="btn btn-outline-info" onclick="refreshData()">
+                <i class="bi bi-arrow-clockwise me-2"></i>刷新数据
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time Data -->
+<div class="row mb-4" id="realtimeSection">
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-primary" id="currentPrice">-</div>
+            <div class="metric-label">最新价</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value" id="changePct">-</div>
+            <div class="metric-label">涨跌幅</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-info" id="highPrice">-</div>
+            <div class="metric-label">最高价</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="metric-card">
+            <div class="metric-value text-warning" id="lowPrice">-</div>
+            <div class="metric-label">最低价</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="chart-container">
+            <h5 class="mb-3">
+                <i class="bi bi-graph-up me-2"></i>价格走势图
+                <div class="btn-group btn-group-sm float-end">
+                    <button class="btn btn-outline-secondary" onclick="loadChart(30)">30天</button>
+                    <button class="btn btn-outline-secondary active" onclick="loadChart(60)">60天</button>
+                    <button class="btn btn-outline-secondary" onclick="loadChart(90)">90天</button>
+                </div>
+            </h5>
+            <img id="chartImage" src="" alt="价格走势图" class="img-fluid" style="display: none;">
+            <div id="chartPlaceholder" class="text-center text-muted py-5">
+                <div class="spinner mb-3"></div>
+                <p>加载图表中...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Data -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar me-2"></i>近5日行情
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>开盘</th>
+                                <th>收盘</th>
+                                <th>最高</th>
+                                <th>最低</th>
+                                <th>成交量</th>
+                                <th>涨跌幅</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentData">
+                            <tr><td colspan="7" class="text-center py-4">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const stockCode = '{{ code }}';
+let currentDays = 60;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadStockInfo();
+    loadChart(currentDays);
+});
+
+async function loadStockInfo() {
+    try {
+        const response = await fetch(`/api/stock_info/${stockCode}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            displayInfo(result);
+        } else {
+            document.getElementById('stockName').textContent = result.error || '未知股票';
+        }
+    } catch (error) {
+        console.error('Failed to load stock info:', error);
+        document.getElementById('stockName').textContent = '加载失败';
+    }
+}
+
+function displayInfo(data) {
+    const spot = data.spot;
+    
+    // Update name
+    document.getElementById('stockName').textContent = spot?.['股票名称'] || '';
+    
+    // Update prices
+    document.getElementById('currentPrice').textContent = spot?.['最新价'] || '-';
+    
+    const changePct = spot?.['涨跌幅'] || 0;
+    const changeElem = document.getElementById('changePct');
+    changeElem.textContent = (changePct > 0 ? '+' : '') + changePct + '%';
+    changeElem.className = changePct > 0 ? 'metric-value text-danger' : 
+                          changePct < 0 ? 'metric-value text-success' : 'metric-value';
+    
+    document.getElementById('highPrice').textContent = spot?.['最高价'] || '-';
+    document.getElementById('lowPrice').textContent = spot?.['最低价'] || '-';
+    
+    // Update recent data
+    const recentHtml = data.recent_data.map(item => `
+        <tr>
+            <td>${item.date}</td>
+            <td>${item.open.toFixed(2)}</td>
+            <td>${item.close.toFixed(2)}</td>
+            <td>${item.high.toFixed(2)}</td>
+            <td>${item.low.toFixed(2)}</td>
+            <td>${item.volume.toLocaleString()}</td>
+            <td class="${item.pct_change > 0 ? 'up' : 'down'}">${item.pct_change.toFixed(2)}%</td>
+        </tr>
+    `).join('');
+    document.getElementById('recentData').innerHTML = recentHtml;
+}
+
+async function loadChart(days) {
+    currentDays = days;
+    
+    // Update button states
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.includes(days + '天')) {
+            btn.classList.add('active');
+        }
+    });
+    
+    try {
+        const response = await fetch(`/api/chart/${stockCode}?days=${days}&type=technical`);
+        const result = await response.json();
+        
+        if (result.success && result.chart) {
+            document.getElementById('chartImage').src = 'data:image/png;base64,' + result.chart;
+            document.getElementById('chartImage').style.display = 'block';
+            document.getElementById('chartPlaceholder').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to load chart:', error);
+        document.getElementById('chartPlaceholder').innerHTML = '<p class="text-danger">加载图表失败</p>';
+    }
+}
+
+function analyzeStock() {
+    window.location.href = `/analysis?code=${stockCode}`;
+}
+
+function addToCompare() {
+    // Add to localStorage for comparison
+    let compareList = JSON.parse(localStorage.getItem('compareList') || '[]');
+    if (!compareList.includes(stockCode)) {
+        compareList.push(stockCode);
+        localStorage.setItem('compareList', JSON.stringify(compareList));
+        alert('已加入对比列表');
+    } else {
+        alert('股票已在对比列表中');
+    }
+}
+
+function refreshData() {
+    loadStockInfo();
+    loadChart(currentDays);
+}
+</script>
+{% endblock %}
