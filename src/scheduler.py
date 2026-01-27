@@ -92,7 +92,11 @@ class StockScheduler:
     
     def _log(self, level: str, message: str):
         """日志记录"""
-        getattr(self.logger, level)(message)
+        # 处理 success 级别（标准 logger 没有这个级别）
+        if level == 'success':
+            getattr(self.logger, 'info')(message)
+        else:
+            getattr(self.logger, level)(message)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] [{level.upper()}] {message}")
     
     def _calculate_next_run(self, interval_minutes: int) -> datetime:
