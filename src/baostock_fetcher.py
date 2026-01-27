@@ -213,11 +213,36 @@ class BaoStockDataFetcher:
         try:
             result = {}
             
-            # 从今天开始往前查找最近的交易日
+            if not codes:
+                return result
+            
+            # 步骤1: 批量获取缓存中有效的数据
+            if self.enable_cache and self.cache:
+                for code in codes:
+                    cached_data = self.cache.get_spot_data(code, max_age_hours=1)
+                    if cached_data is not None:
+                        result[code] = cached_data
+            
+            # 步骤2: 找出需要从API获取的股票
+            codes_need_fetch = [code for code in codes if code not in result]
+            
+            if not codes_need_fetch:
+                print(f"所有 {len(codes)} 只股票的实时行情都来自缓存")
+                return result
+            
+            print(f"需要从API获取 {len(codes_need_fetch)} 只股票的实时行情")
+            
+            # 步骤3: 从今天开始往前查找最近的交易日
             for i in range(30):
                 date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
                 
-                for code in codes:
+                # 如果所有需要获取的股票都有了数据，提前退出
+                codes_remaining = [code for code in codes_need_fetch if code not in result]
+                if not codes_remaining:
+                    print(f"已获取所有股票的实时行情")
+                    break
+                
+                for code in codes_remaining:
                     if code in result:
                         continue
                     
@@ -228,13 +253,6 @@ class BaoStockDataFetcher:
                             code_with_prefix = f'sh.{code}'
                         else:
                             code_with_prefix = f'sz.{code}'
-                    
-                    # 尝试从缓存获取
-                    if self.enable_cache and self.cache:
-                        cached_data = self.cache.get_spot_data(code, max_age_hours=1)
-                        if cached_data is not None:
-                            result[code] = cached_data
-                            continue
                     
                     rs = bs.query_history_k_data_plus(
                         code_with_prefix,
@@ -260,15 +278,13 @@ class BaoStockDataFetcher:
                         # 保存到缓存
                         if self.enable_cache and self.cache:
                             self.cache.save_spot_data(code, spot_data)
-                
-                # 如果所有股票都获取到了数据，提前退出
-                if len(result) == len(codes):
-                    break
             
             return result
             
         except Exception as e:
             print(f"批量获取实时行情失败: {e}")
+            import traceback
+            traceback.print_exc()
             return {}
     
     def get_historical_data(
