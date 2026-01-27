@@ -52,18 +52,51 @@ def index():
 
 @app.route('/api/stock_list')
 def api_stock_list():
-    """获取股票列表API"""
+    """获取股票列表API（带实时行情）"""
     try:
         stocks = fetcher.get_stock_list()
-        # 只返回部分字段，避免数据过大
-        stocks = stocks.head(500)  # 限制返回数量
-        data = stocks.to_dict(orient='records')
+        # 减少返回数量以提高性能
+        stocks = stocks.head(50)
+        
+        # 批量获取实时行情
+        codes = stocks['code'].tolist()
+        spot_data_dict = fetcher.get_batch_spot_data(codes)
+        
+        # 为每只股票获取实时行情
+        stock_list = []
+        for _, row in stocks.iterrows():
+            code = row['code']
+            spot = spot_data_dict.get(code, {})
+            
+            # 安全地获取价格和涨跌幅，处理空字符串和None
+            price = 0
+            change_pct = 0
+            if spot:
+                try:
+                    price = float(spot.get('close', 0)) if spot.get('close') not in ['', None] else 0
+                    change_pct = float(spot.get('pctChg', 0)) if spot.get('pctChg') not in ['', None] else 0
+                except (ValueError, TypeError):
+                    price = 0
+                    change_pct = 0
+            
+            stock_data = {
+                'code': code,
+                'name': row['name'],
+                'status': row['status'],
+                'market': row['market'],
+                'price': price,
+                'change_pct': change_pct
+            }
+            stock_list.append(stock_data)
+        
         return jsonify({
             'success': True,
-            'count': len(data),
-            'data': data
+            'count': len(stock_list),
+            'data': stock_list
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 

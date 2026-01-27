@@ -56,13 +56,25 @@ class BaoStockDataFetcher:
                     print(f"从缓存获取股票列表，共 {len(cached_data)} 只股票")
                     return cached_data
             
-            # 尝试获取股票列表，从今天开始往前找最近的交易日
+            # 尝试获取股票列表，使用多个日期策略
             dates_to_try = []
             
-            # 添加今天和最近30天的工作日
-            for i in range(30):
+            # 策略1: 使用已知的历史交易日（baostock数据通常有延迟）
+            # 使用2024年底和2025年初的日期
+            known_trading_dates = [
+                '2025-01-27', '2025-01-24', '2025-01-23', '2025-01-22', '2025-01-21',
+                '2025-01-20', '2025-01-17', '2025-01-16', '2025-01-15', '2025-01-14',
+                '2025-01-13', '2025-01-10', '2025-01-09', '2025-01-08', '2025-01-07',
+                '2025-01-06', '2025-01-03', '2025-01-02', '2024-12-31', '2024-12-30',
+                '2024-12-27', '2024-12-26', '2024-12-25', '2024-12-24', '2024-12-23'
+            ]
+            dates_to_try.extend(known_trading_dates)
+            
+            # 策略2: 从今天开始往前找最近的60天（作为后备）
+            for i in range(60):
                 date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-                dates_to_try.append(date)
+                if date not in dates_to_try:
+                    dates_to_try.append(date)
             
             for date in dates_to_try:
                 rs = bs.query_all_stock(day=date)
@@ -77,13 +89,16 @@ class BaoStockDataFetcher:
                 result = pd.DataFrame(data_list, columns=rs.fields)
                 
                 # 过滤出A股股票（排除指数）
-                # 上海: 6开头主板, 0开头科创板
-                # 深圳: 0开头主板, 3开头创业板
+                # 上海主板: sh.600000-604999
+                # 上海科创板: sh.688000-688999
+                # 深圳主板: sz.000xxx, sz.001xxx
+                # 深圳创业板: sz.300xxx
                 a_stocks = result[
-                    (result['code'].str.startswith('sh.6')) |  # 上海主板
-                    (result['code'].str.startswith('sh.0')) |  # 上海科创板
-                    (result['code'].str.startswith('sz.0')) |  # 深圳主板
-                    (result['code'].str.startswith('sz.3'))    # 深圳创业板
+                    (result['code'].str.startswith('sh.60')) |  # 上海主板
+                    (result['code'].str.startswith('sh.688')) |  # 上海科创板
+                    (result['code'].str.startswith('sz.000')) |  # 深圳主板
+                    (result['code'].str.startswith('sz.001')) |  # 深圳主板
+                    (result['code'].str.startswith('sz.300'))    # 深圳创业板
                 ].copy()
                 
                 # 如果没有A股股票，继续尝试下一个日期
@@ -148,39 +163,112 @@ class BaoStockDataFetcher:
                 else:
                     code = f'sz.{code}'
             
-            # 获取最新一天的数据作为"实时"行情
-            today = datetime.now().strftime('%Y-%m-%d')
-            rs = bs.query_history_k_data_plus(
-                code,
-                "date,code,open,high,low,close,volume,amount,pctChg,turn",
-                start_date=today,
-                end_date=today,
-                frequency="d",
-                adjustflag="3"
-            )
+            # 获取最近一个交易日的数据作为"实时"行情
+            # 从今天开始往前查找最近的交易日
+            for i in range(30):
+                date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                rs = bs.query_history_k_data_plus(
+                    code,
+                    "date,code,open,high,low,close,volume,amount,pctChg,turn",
+                    start_date=date,
+                    end_date=date,
+                    frequency="d",
+                    adjustflag="3"
+                )
+                
+                if rs.error_code != '0':
+                    continue
+                
+                data_list = []
+                while (rs.error_code == '0') & rs.next():
+                    data_list.append(rs.get_row_data())
+                
+                if data_list:
+                    result = pd.DataFrame(data_list, columns=rs.fields)
+                    spot_data = result.iloc[0].to_dict()
+                    
+                    # 保存到缓存
+                    if self.enable_cache and self.cache:
+                        self.cache.save_spot_data(code, spot_data)
+                        print(f"已保存股票 {code} 实时行情到缓存")
+                    
+                    return spot_data
             
-            if rs.error_code != '0':
-                return {}
-            
-            data_list = []
-            while (rs.error_code == '0') & rs.next():
-                data_list.append(rs.get_row_data())
-            
-            if not data_list:
-                return {}
-            
-            result = pd.DataFrame(data_list, columns=rs.fields)
-            spot_data = result.iloc[0].to_dict()
-            
-            # 保存到缓存
-            if self.enable_cache and self.cache:
-                self.cache.save_spot_data(code, spot_data)
-                print(f"已保存股票 {code} 实时行情到缓存")
-            
-            return spot_data
+            return {}
             
         except Exception as e:
             print(f"获取股票 {code} 实时行情失败: {e}")
+            return {}
+    
+    def get_batch_spot_data(self, codes: list) -> dict:
+        """
+        批量获取多只股票的实时行情
+        
+        Args:
+            codes: 股票代码列表 (如: ['000001', '600000'])
+            
+        Returns:
+            字典，key为股票代码，value为行情数据
+        """
+        try:
+            result = {}
+            
+            # 从今天开始往前查找最近的交易日
+            for i in range(30):
+                date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                
+                for code in codes:
+                    if code in result:
+                        continue
+                    
+                    # 标准化代码格式
+                    code_with_prefix = code
+                    if '.' not in code:
+                        if code.startswith('6'):
+                            code_with_prefix = f'sh.{code}'
+                        else:
+                            code_with_prefix = f'sz.{code}'
+                    
+                    # 尝试从缓存获取
+                    if self.enable_cache and self.cache:
+                        cached_data = self.cache.get_spot_data(code, max_age_hours=1)
+                        if cached_data is not None:
+                            result[code] = cached_data
+                            continue
+                    
+                    rs = bs.query_history_k_data_plus(
+                        code_with_prefix,
+                        "date,code,open,high,low,close,volume,amount,pctChg,turn",
+                        start_date=date,
+                        end_date=date,
+                        frequency="d",
+                        adjustflag="3"
+                    )
+                    
+                    if rs.error_code != '0':
+                        continue
+                    
+                    data_list = []
+                    while (rs.error_code == '0') & rs.next():
+                        data_list.append(rs.get_row_data())
+                    
+                    if data_list:
+                        df = pd.DataFrame(data_list, columns=rs.fields)
+                        spot_data = df.iloc[0].to_dict()
+                        result[code] = spot_data
+                        
+                        # 保存到缓存
+                        if self.enable_cache and self.cache:
+                            self.cache.save_spot_data(code, spot_data)
+                
+                # 如果所有股票都获取到了数据，提前退出
+                if len(result) == len(codes):
+                    break
+            
+            return result
+            
+        except Exception as e:
+            print(f"批量获取实时行情失败: {e}")
             return {}
     
     def get_historical_data(
