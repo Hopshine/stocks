@@ -55,6 +55,8 @@ def api_stock_list():
     """获取股票列表API（带实时行情）"""
     try:
         stocks = fetcher.get_stock_list()
+        total_count = len(stocks)
+        
         # 减少返回数量以提高性能
         stocks = stocks.head(50)
         
@@ -91,8 +93,48 @@ def api_stock_list():
         
         return jsonify({
             'success': True,
+            'total_count': total_count,
             'count': len(stock_list),
             'data': stock_list
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/search')
+def api_search():
+    """股票搜索API（支持代码和名称模糊匹配）"""
+    try:
+        keyword = request.args.get('q', '').strip()
+        limit = int(request.args.get('limit', 10))
+        
+        if not keyword:
+            return jsonify({'success': True, 'data': []})
+        
+        stocks = fetcher.get_stock_list()
+        
+        # 模糊匹配：代码或名称包含关键词
+        mask = (
+            stocks['code'].str.contains(keyword, case=False, na=False) |
+            stocks['name'].str.contains(keyword, case=False, na=False)
+        )
+        matched = stocks[mask].head(limit)
+        
+        # 转换为列表
+        results = []
+        for _, row in matched.iterrows():
+            results.append({
+                'code': row['code'],
+                'name': row['name'],
+                'market': row['market']
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': results,
+            'count': len(results)
         })
     except Exception as e:
         import traceback

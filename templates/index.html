@@ -8,10 +8,11 @@
             <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
         </h1>
         <p class="lead text-muted mb-4">专业的股票数据分析与选股工具</p>
-        <div class="search-box mx-auto" style="max-width: 600px;">
+        <div class="search-box mx-auto position-relative" style="max-width: 600px;">
             <i class="bi bi-search"></i>
             <input type="text" class="form-control form-control-lg" id="searchInput" 
-                   placeholder="输入股票代码或名称 (如: 000001)" onkeypress="handleEnter(event)">
+                   placeholder="输入股票代码或名称 (如: 000001)" onkeypress="handleEnter(event)" oninput="handleSearchInput(event)">
+            <div id="searchResults" class="search-results dropdown-menu" style="display: none;"></div>
         </div>
         <button class="btn btn-primary btn-lg mt-3" onclick="searchStock()">
             <i class="bi bi-search me-2"></i>查询股票
@@ -148,6 +149,50 @@ document.addEventListener('DOMContentLoaded', function() {
     loadMarketData();
 });
 
+let searchTimeout = null;
+
+function handleSearchInput(event) {
+    const keyword = event.target.value.trim();
+    const resultsDiv = document.getElementById('searchResults');
+    
+    // 清除之前的定时器
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // 如果输入为空，隐藏结果
+    if (!keyword) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+    
+    // 防抖：延迟300ms后再搜索
+    searchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/search?q=${encodeURIComponent(keyword)}&limit=10`);
+            const result = await response.json();
+            
+            if (result.success && result.data.length > 0) {
+                const html = result.data.map(stock => `
+                    <a class="dropdown-item" href="/stock/${stock.code}">
+                        <span class="fw-bold">${stock.code}</span>
+                        <span class="text-muted ms-2">${stock.name}</span>
+                        <span class="badge bg-secondary ms-2">${stock.market}</span>
+                    </a>
+                `).join('');
+                
+                resultsDiv.innerHTML = html;
+                resultsDiv.style.display = 'block';
+            } else {
+                resultsDiv.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('搜索失败:', error);
+            resultsDiv.style.display = 'none';
+        }
+    }, 300);
+}
+
 function handleEnter(event) {
     if (event.key === 'Enter') {
         searchStock();
@@ -161,6 +206,14 @@ function searchStock() {
     }
 }
 
+// 点击页面其他地方时隐藏搜索结果
+document.addEventListener('click', function(event) {
+    const searchBox = document.querySelector('.search-box');
+    if (!searchBox.contains(event.target)) {
+        document.getElementById('searchResults').style.display = 'none';
+    }
+});
+
 async function loadMarketData() {
     try {
         const response = await fetch('/api/stock_list');
@@ -170,7 +223,7 @@ async function loadMarketData() {
             const stocks = result.data;
             
             // Update stats
-            document.getElementById('totalStocks').textContent = stocks.length;
+            document.getElementById('totalStocks').textContent = result.total_count;
             
             const upStocks = stocks.filter(s => s.change_pct > 0);
             const downStocks = stocks.filter(s => s.change_pct < 0);

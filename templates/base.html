@@ -145,6 +145,37 @@
             color: #95a5a6;
         }
         
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1000;
+            margin-top: 5px;
+            padding: 0.5rem 0;
+        }
+        
+        .search-results .dropdown-item {
+            padding: 0.75rem 1rem;
+            border: none;
+            transition: all 0.2s ease;
+        }
+        
+        .search-results .dropdown-item:hover {
+            background-color: #f8f9fa;
+            padding-left: 1.25rem;
+        }
+        
+        .search-results .dropdown-item .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
         .chart-container {
             background: white;
             border-radius: 15px;
