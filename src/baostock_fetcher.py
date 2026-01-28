@@ -155,15 +155,20 @@ class BaoStockDataFetcher:
             code: 股票代码 (如: 000001, 600000)
             
         Returns:
-            包含实时行情数据的字典
+            包含实时行情数据的字典（中文键名）
         """
         try:
             # 尝试从缓存获取
             if self.enable_cache and self.cache:
                 cached_data = self.cache.get_spot_data(code, max_age_hours=1)
                 if cached_data is not None:
-                    print(f"从缓存获取股票 {code} 实时行情")
-                    return cached_data
+                    # 检查缓存数据格式是否是中文键名
+                    if '最新价' in cached_data:
+                        print(f"从缓存获取股票 {code} 实时行情")
+                        return cached_data
+                    else:
+                        # 缓存是旧格式，重新获取
+                        print(f"缓存格式旧，重新获取股票 {code} 实时行情")
             
             # 标准化代码格式
             if '.' not in code:
@@ -194,7 +199,21 @@ class BaoStockDataFetcher:
                 
                 if data_list:
                     result = pd.DataFrame(data_list, columns=rs.fields)
-                    spot_data = result.iloc[0].to_dict()
+                    raw_data = result.iloc[0].to_dict()
+                    
+                    # 转换为中文键名
+                    spot_data = {
+                        '日期': raw_data.get('date', ''),
+                        '股票代码': raw_data.get('code', ''),
+                        '开盘价': self._safe_float(raw_data.get('open')),
+                        '最高价': self._safe_float(raw_data.get('high')),
+                        '最低价': self._safe_float(raw_data.get('low')),
+                        '最新价': self._safe_float(raw_data.get('close')),
+                        '成交量': self._safe_float(raw_data.get('volume')),
+                        '成交额': self._safe_float(raw_data.get('amount')),
+                        '涨跌幅': self._safe_float(raw_data.get('pctChg')),
+                        '换手率': self._safe_float(raw_data.get('turn'))
+                    }
                     
                     # 保存到缓存
                     if self.enable_cache and self.cache:
@@ -208,6 +227,15 @@ class BaoStockDataFetcher:
         except Exception as e:
             print(f"获取股票 {code} 实时行情失败: {e}")
             return {}
+    
+    def _safe_float(self, value, default=0.0):
+        """安全转换为浮点数"""
+        if value is None or value == '' or value == '-':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
     
     def get_batch_spot_data(self, codes: list) -> dict:
         """

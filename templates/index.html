@@ -219,11 +219,13 @@ async function loadMarketData() {
         const response = await fetch('/api/stock_list');
         const result = await response.json();
         
+        console.log('API Response:', result);
+        
         if (result.success) {
             const stocks = result.data;
             
             // Update stats - 使用API返回的统计数据（基于全部3742只股票）
-            document.getElementById('totalStocks').textContent = result.total_count;
+            document.getElementById('totalStocks').textContent = result.total_count || 0;
             document.getElementById('upCount').textContent = result.up_count || 0;
             document.getElementById('downCount').textContent = result.down_count || 0;
             
@@ -255,6 +257,8 @@ async function loadMarketData() {
                 </tr>
             `).join('');
             document.getElementById('topLosers').innerHTML = losersHtml;
+        } else {
+            console.error('API Error:', result.error);
         }
     } catch (error) {
         console.error('Failed to load market data:', error);
