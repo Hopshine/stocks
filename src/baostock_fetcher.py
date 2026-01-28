@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
 from .cache import StockDataCache
+from . import baostock_global
 
 
 class BaoStockDataFetcher:
@@ -25,20 +26,28 @@ class BaoStockDataFetcher:
         self._login()
     
     def _login(self):
-        """登录baostock"""
-        self.lg = bs.login()
-        if self.lg.error_code != '0':
-            print(f"登录baostock失败: {self.lg.error_msg}")
-            raise Exception(f"登录失败: {self.lg.error_msg}")
+        """登录baostock（使用全局登录）"""
+        try:
+            self.lg = baostock_global.global_login()
+        except Exception as e:
+            print(f"登录baostock失败: {e}")
+            raise
     
     def _logout(self):
-        """登出baostock"""
+        """登出baostock（使用全局登出）"""
         if self.lg:
-            bs.logout()
+            try:
+                baostock_global.global_logout()
+            except Exception:
+                pass
             self.lg = None
     
     def __del__(self):
-        """析构时自动登出"""
+        """析构时自动登出（已禁用，避免影响其他实例）"""
+        pass
+    
+    def close(self):
+        """手动关闭连接"""
         self._logout()
     
     def get_stock_list(self) -> pd.DataFrame:

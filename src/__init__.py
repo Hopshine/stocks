@@ -30,6 +30,12 @@ from .baostock_fetcher import (
     BaoStockDataFetcher
 )
 
+from .baostock_global import (
+    global_login,
+    global_logout,
+    get_login
+)
+
 from .cache import (
     StockDataCache
 )
@@ -93,6 +99,11 @@ __all__ = [
     'StockDataCache',
     'fetch_stock_data',
     'fetch_market_data',
+    
+    # baostock 全局登录
+    'global_login',
+    'global_logout',
+    'get_login',
     
     # 配置
     'DB_CONFIG',
