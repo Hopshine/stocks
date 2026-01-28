@@ -52,25 +52,84 @@ def index():
 
 @app.route('/api/stock_list')
 def api_stock_list():
-    """获取股票列表API（带实时行情）"""
+    """获取股票列表API（带实时行情和涨跌统计）"""
     try:
         stocks = fetcher.get_stock_list()
         total_count = len(stocks)
         
+        # 使用样本股票计算统计数据（提高性能）- 只使用缓存数据，快速响应
+        sample_size = min(200, len(stocks))
+        sample_stocks = stocks.sample(n=sample_size, random_state=42) if len(stocks) > sample_size else stocks
+        sample_codes = sample_stocks['code'].tolist()
+        
+        # 只从缓存获取样本股票的实时行情（不调用API，保证快速响应）
+        spot_data_dict = {}
+        if hasattr(fetcher, 'cache') and fetcher.cache:
+            for code in sample_codes:
+                cached_data = fetcher.cache.get_spot_data(code, max_age_hours=1)
+                if cached_data is not None:
+                    spot_data_dict[code] = cached_data
+        
+        # 统计涨跌（基于样本）- 所有样本股票都计入
+        up_count = 0
+        down_count = 0
+        flat_count = 0
+        total_change_pct = 0
+        cached_count = 0
+        
+        for _, row in sample_stocks.iterrows():
+            code = row['code']
+            spot = spot_data_dict.get(code, {})
+            
+            # 获取涨跌幅，没有缓存数据的算0%（不等待API）
+            try:
+                change_pct = float(spot.get('pctChg', 0)) if spot and spot.get('pctChg') not in ['', None] else 0
+            except (ValueError, TypeError):
+                change_pct = 0
+            
+            if change_pct > 0:
+                up_count += 1
+            elif change_pct < 0:
+                down_count += 1
+            else:
+                flat_count += 1
+            
+            total_change_pct += change_pct
+            if spot:
+                cached_count += 1
+        
+        # 根据样本比例推算总数
+        if len(stocks) > sample_size:
+            ratio = len(stocks) / sample_size
+            up_count = int(up_count * ratio)
+            down_count = int(down_count * ratio)
+            flat_count = int(flat_count * ratio)
+            
+            # 确保总数匹配（调整最后一个类别）
+            current_total = up_count + down_count + flat_count
+            if current_total != len(stocks):
+                diff = len(stocks) - current_total
+                # 将差值加到最大的类别上
+                max_count = max(up_count, down_count, flat_count)
+                if max_count == up_count:
+                    up_count += diff
+                elif max_count == down_count:
+                    down_count += diff
+                else:
+                    flat_count += diff
+        
+        avg_change_pct = total_change_pct / sample_size if sample_size > 0 else 0
+        
         # 减少返回数量以提高性能
         stocks = stocks.head(50)
-        
-        # 批量获取实时行情
         codes = stocks['code'].tolist()
-        spot_data_dict = fetcher.get_batch_spot_data(codes)
         
-        # 为每只股票获取实时行情
+        # 为显示的股票获取实时行情（也只使用缓存）
         stock_list = []
         for _, row in stocks.iterrows():
             code = row['code']
             spot = spot_data_dict.get(code, {})
             
-            # 安全地获取价格和涨跌幅，处理空字符串和None
             price = 0
             change_pct = 0
             if spot:
@@ -95,6 +154,10 @@ def api_stock_list():
             'success': True,
             'total_count': total_count,
             'count': len(stock_list),
+            'up_count': up_count,
+            'down_count': down_count,
+            'flat_count': flat_count,
+            'avg_change_pct': avg_change_pct,
             'data': stock_list
         })
     except Exception as e:

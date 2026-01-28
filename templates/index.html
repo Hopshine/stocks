@@ -222,16 +222,12 @@ async function loadMarketData() {
         if (result.success) {
             const stocks = result.data;
             
-            // Update stats
+            // Update stats - 使用API返回的统计数据（基于全部3742只股票）
             document.getElementById('totalStocks').textContent = result.total_count;
+            document.getElementById('upCount').textContent = result.up_count || 0;
+            document.getElementById('downCount').textContent = result.down_count || 0;
             
-            const upStocks = stocks.filter(s => s.change_pct > 0);
-            const downStocks = stocks.filter(s => s.change_pct < 0);
-            
-            document.getElementById('upCount').textContent = upStocks.length;
-            document.getElementById('downCount').textContent = downStocks.length;
-            
-            const avgChange = stocks.reduce((sum, s) => sum + (s.change_pct || 0), 0) / stocks.length;
+            const avgChange = result.avg_change_pct || 0;
             const avgChangeElem = document.getElementById('avgChange');
             avgChangeElem.textContent = (avgChange > 0 ? '+' : '') + avgChange.toFixed(2) + '%';
             avgChangeElem.className = avgChange >= 0 ? 'metric-value text-danger' : 'metric-value text-success';
