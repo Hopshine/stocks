@@ -31,8 +31,8 @@ API_CONFIG = {
     # baostock配置
     'baostock': {
         'enabled': True,
-        'retry_times': 3,
-        'retry_interval_seconds': 5,
+        'retry_times': 5,  # 增加重试次数
+        'retry_interval_seconds': 3,  # 减少初始等待时间
     },
     # akshare配置（备用）
     'akshare': {

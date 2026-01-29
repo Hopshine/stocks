@@ -110,7 +110,7 @@ class DataSyncService:
     
     def _retry_sync(self, sync_func, *args, **kwargs) -> tuple:
         """
-        带重试机制的同步
+        带重试机制的同步（支持指数退避）
         
         Args:
             sync_func: 同步函数
@@ -128,8 +128,10 @@ class DataSyncService:
             except Exception as e:
                 last_error = str(e)
                 if attempt < self.retry_times:
-                    self.logger.warning(f"第 {attempt} 次尝试失败，{self.retry_interval}秒后重试...")
-                    time.sleep(self.retry_interval)
+                    # 指数退避策略：每次重试等待时间加倍
+                    wait_time = self.retry_interval * (2 ** (attempt - 1))
+                    self.logger.warning(f"第 {attempt} 次尝试失败，{wait_time}秒后重试（指数退避）...")
+                    time.sleep(wait_time)
                 else:
                     self.logger.error(f"尝试 {self.retry_times} 次后仍失败: {e}")
         
@@ -251,6 +253,36 @@ class DataSyncService:
         result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
         self.sync_status['last_market_data_sync'] = datetime.now()
         self.logger.success(f"同步实时行情成功，成功 {len(all_data)}/{len(codes)} 只，耗时 {result['duration_seconds']:.2f}秒")
+        
+        # 对失败的股票进行重试
+        failed_codes = [code for code in codes if code not in all_data]
+        if failed_codes:
+            self.logger.info(f"开始重试 {len(failed_codes)} 只失败的股票...")
+            
+            # 分批次重试失败的股票（每批100只）
+            retry_batch_size = 100
+            retry_batches = (len(failed_codes) + retry_batch_size - 1) // retry_batch_size
+            
+            for i in range(0, len(failed_codes), retry_batch_size):
+                retry_codes = failed_codes[i:i + retry_batch_size]
+                retry_batch_num = i // retry_batch_size + 1
+                
+                self.logger.info(f"正在重试第 {retry_batch_num}/{retry_batches} 批次，共 {len(retry_codes)} 只股票")
+                
+                # 批量获取行情数据（使用更长的重试次数）
+                success, data, error = self._retry_sync(fetcher.get_batch_spot_data, retry_codes)
+                
+                if success:
+                    all_data.update(data)
+                    self.logger.success(f"重试第 {retry_batch_num} 批次完成，成功 {len(data)}/{len(retry_codes)} 只")
+                else:
+                    self.logger.warning(f"重试第 {retry_batch_num} 批次失败: {error}")
+                    result['errors'].append(f"重试批次 {retry_batch_num}: {error}")
+            
+            # 更新最终结果
+            result['success_count'] = len(all_data)
+            result['failed_count'] = len(codes) - len(all_data)
+            self.logger.info(f"重试完成，最终成功 {len(all_data)}/{len(codes)} 只股票")
         
         return result
     
