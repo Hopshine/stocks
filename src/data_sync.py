@@ -213,7 +213,8 @@ class DataSyncService:
         if codes is None:
             try:
                 stock_list = fetcher.get_stock_list()
-                codes = stock_list['code'].tolist()[:100]  # 限制前100只，避免耗时过长
+                # 增加同步数量到1000只，覆盖更多股票数据（约27%的股票）
+                codes = stock_list['code'].tolist()[:1000]
             except Exception as e:
                 result['errors'].append(f"获取股票列表失败: {e}")
                 result['duration_seconds'] = (datetime.now() - start_time).total_seconds()

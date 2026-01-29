@@ -239,7 +239,7 @@ class BaoStockDataFetcher:
     
     def get_batch_spot_data(self, codes: list) -> dict:
         """
-        批量获取多只股票的实时行情
+        批量获取多只股票的实时行情（优化版）
         
         Args:
             codes: 股票代码列表 (如: ['000001', '600000'])
@@ -269,53 +269,89 @@ class BaoStockDataFetcher:
             
             print(f"需要从API获取 {len(codes_need_fetch)} 只股票的实时行情")
             
-            # 步骤3: 从今天开始往前查找最近的交易日
+            # 步骤3: 优化日期查找策略 - 先找到最近的交易日，再批量获取
+            trading_date = None
             for i in range(30):
                 date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                # 测试一个股票是否在这个日期有数据
+                test_code = codes_need_fetch[0]
+                code_with_prefix = test_code if '.' in test_code else (f'sh.{test_code}' if test_code.startswith('6') else f'sz.{test_code}')
                 
-                # 如果所有需要获取的股票都有了数据，提前退出
-                codes_remaining = [code for code in codes_need_fetch if code not in result]
-                if not codes_remaining:
-                    print(f"已获取所有股票的实时行情")
-                    break
+                rs = bs.query_history_k_data_plus(
+                    code_with_prefix,
+                    "date",
+                    start_date=date,
+                    end_date=date,
+                    frequency="d",
+                    adjustflag="3"
+                )
                 
-                for code in codes_remaining:
-                    if code in result:
-                        continue
-                    
-                    # 标准化代码格式
-                    code_with_prefix = code
-                    if '.' not in code:
-                        if code.startswith('6'):
-                            code_with_prefix = f'sh.{code}'
-                        else:
-                            code_with_prefix = f'sz.{code}'
-                    
-                    rs = bs.query_history_k_data_plus(
-                        code_with_prefix,
-                        "date,code,open,high,low,close,volume,amount,pctChg,turn",
-                        start_date=date,
-                        end_date=date,
-                        frequency="d",
-                        adjustflag="3"
-                    )
-                    
-                    if rs.error_code != '0':
-                        continue
-                    
+                if rs.error_code == '0':
                     data_list = []
                     while (rs.error_code == '0') & rs.next():
                         data_list.append(rs.get_row_data())
-                    
                     if data_list:
-                        df = pd.DataFrame(data_list, columns=rs.fields)
-                        spot_data = df.iloc[0].to_dict()
-                        result[code] = spot_data
-                        
-                        # 保存到缓存
-                        if self.enable_cache and self.cache:
-                            self.cache.save_spot_data(code, spot_data)
+                        trading_date = date
+                        print(f"找到最近交易日: {trading_date}")
+                        break
             
+            if not trading_date:
+                print("未找到有效交易日，使用今天日期")
+                trading_date = datetime.now().strftime('%Y-%m-%d')
+            
+            # 步骤4: 在找到的交易日批量获取所有股票数据
+            for code in codes_need_fetch:
+                if code in result:
+                    continue
+                
+                # 标准化代码格式
+                code_with_prefix = code
+                if '.' not in code:
+                    if code.startswith('6'):
+                        code_with_prefix = f'sh.{code}'
+                    else:
+                        code_with_prefix = f'sz.{code}'
+                
+                rs = bs.query_history_k_data_plus(
+                    code_with_prefix,
+                    "date,code,open,high,low,close,volume,amount,pctChg,turn",
+                    start_date=trading_date,
+                    end_date=trading_date,
+                    frequency="d",
+                    adjustflag="3"
+                )
+                
+                if rs.error_code != '0':
+                    continue
+                
+                data_list = []
+                while (rs.error_code == '0') & rs.next():
+                    data_list.append(rs.get_row_data())
+                
+                if data_list:
+                    df = pd.DataFrame(data_list, columns=rs.fields)
+                    raw_data = df.iloc[0].to_dict()
+                    
+                    # 转换为中文键名（与get_stock_spot保持一致）
+                    spot_data = {
+                        '日期': raw_data.get('date', ''),
+                        '股票代码': raw_data.get('code', ''),
+                        '开盘价': self._safe_float(raw_data.get('open')),
+                        '最高价': self._safe_float(raw_data.get('high')),
+                        '最低价': self._safe_float(raw_data.get('low')),
+                        '最新价': self._safe_float(raw_data.get('close')),
+                        '成交量': self._safe_float(raw_data.get('volume')),
+                        '成交额': self._safe_float(raw_data.get('amount')),
+                        '涨跌幅': self._safe_float(raw_data.get('pctChg')),
+                        '换手率': self._safe_float(raw_data.get('turn'))
+                    }
+                    result[code] = spot_data
+                    
+                    # 保存到缓存
+                    if self.enable_cache and self.cache:
+                        self.cache.save_spot_data(code, spot_data)
+            
+            print(f"批量获取完成，成功 {len(result)}/{len(codes)} 只股票")
             return result
             
         except Exception as e:

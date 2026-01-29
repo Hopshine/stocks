@@ -83,7 +83,8 @@ def api_stock_list():
             
             # 获取涨跌幅，没有缓存数据的算0%（不等待API）
             try:
-                change_pct = float(spot.get('pctChg', 0)) if spot and spot.get('pctChg') not in ['', None] else 0
+                # 支持中文和英文键名
+                change_pct = float(spot.get('涨跌幅') or spot.get('pctChg', 0)) if spot and (spot.get('涨跌幅') not in ['', None] or spot.get('pctChg') not in ['', None]) else 0
             except (ValueError, TypeError):
                 change_pct = 0
             
@@ -128,14 +129,18 @@ def api_stock_list():
         stock_list = []
         for _, row in stocks.iterrows():
             code = row['code']
-            spot = spot_data_dict.get(code, {})
+            # 从缓存中获取该股票的实时行情
+            spot = {}
+            if hasattr(fetcher, 'cache') and fetcher.cache:
+                spot = fetcher.cache.get_spot_data(code, max_age_hours=1) or {}
             
             price = 0
             change_pct = 0
             if spot:
                 try:
-                    price = float(spot.get('close', 0)) if spot.get('close') not in ['', None] else 0
-                    change_pct = float(spot.get('pctChg', 0)) if spot.get('pctChg') not in ['', None] else 0
+                    # 支持中文和英文键名
+                    price = float(spot.get('最新价') or spot.get('close', 0)) if (spot.get('最新价') not in ['', None] or spot.get('close') not in ['', None]) else 0
+                    change_pct = float(spot.get('涨跌幅') or spot.get('pctChg', 0)) if (spot.get('涨跌幅') not in ['', None] or spot.get('pctChg') not in ['', None]) else 0
                 except (ValueError, TypeError):
                     price = 0
                     change_pct = 0
