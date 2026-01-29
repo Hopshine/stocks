@@ -239,7 +239,7 @@ class BaoStockDataFetcher:
     
     def get_batch_spot_data(self, codes: list) -> dict:
         """
-        批量获取多只股票的实时行情（优化版）
+        批量获取多只股票的实时行情（优化版，支持大规模数据）
         
         Args:
             codes: 股票代码列表 (如: ['000001', '600000'])
@@ -300,7 +300,10 @@ class BaoStockDataFetcher:
                 trading_date = datetime.now().strftime('%Y-%m-%d')
             
             # 步骤4: 在找到的交易日批量获取所有股票数据
-            for code in codes_need_fetch:
+            success_count = 0
+            total_count = len(codes_need_fetch)
+            
+            for idx, code in enumerate(codes_need_fetch):
                 if code in result:
                     continue
                 
@@ -346,12 +349,17 @@ class BaoStockDataFetcher:
                         '换手率': self._safe_float(raw_data.get('turn'))
                     }
                     result[code] = spot_data
+                    success_count += 1
                     
                     # 保存到缓存
                     if self.enable_cache and self.cache:
                         self.cache.save_spot_data(code, spot_data)
+                
+                # 每100只股票显示一次进度
+                if (idx + 1) % 100 == 0:
+                    print(f"进度: {idx + 1}/{total_count} ({(idx + 1) / total_count * 100:.1f}%)")
             
-            print(f"批量获取完成，成功 {len(result)}/{len(codes)} 只股票")
+            print(f"批量获取完成，成功 {success_count}/{total_count} 只股票")
             return result
             
         except Exception as e:

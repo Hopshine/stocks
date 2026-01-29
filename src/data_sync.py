@@ -213,8 +213,9 @@ class DataSyncService:
         if codes is None:
             try:
                 stock_list = fetcher.get_stock_list()
-                # 增加同步数量到1000只，覆盖更多股票数据（约27%的股票）
-                codes = stock_list['code'].tolist()[:1000]
+                # 同步所有股票（全量覆盖）
+                codes = stock_list['code'].tolist()
+                self.logger.info(f"准备同步 {len(codes)} 只股票的实时行情")
             except Exception as e:
                 result['errors'].append(f"获取股票列表失败: {e}")
                 result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
@@ -223,20 +224,33 @@ class DataSyncService:
         
         result['total_stocks'] = len(codes)
         
-        # 批量获取行情数据
-        success, data, error = self._retry_sync(fetcher.get_batch_spot_data, codes)
+        # 分批次同步，避免超时和性能问题
+        batch_size = 500  # 每批500只
+        all_data = {}
+        total_batches = (len(codes) + batch_size - 1) // batch_size
         
-        if success:
-            result['success'] = True
-            result['success_count'] = len(data)
-            result['failed_count'] = len(codes) - len(data)
-            result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
-            self.sync_status['last_market_data_sync'] = datetime.now()
-            self.logger.success(f"同步实时行情成功，成功 {len(data)}/{len(codes)} 只")
-        else:
-            result['errors'].append(error)
-            result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
-            self.logger.end_task(task_name, 'failed', str(result))
+        for i in range(0, len(codes), batch_size):
+            batch_codes = codes[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            
+            self.logger.info(f"正在同步第 {batch_num}/{total_batches} 批次，共 {len(batch_codes)} 只股票")
+            
+            # 批量获取行情数据
+            success, data, error = self._retry_sync(fetcher.get_batch_spot_data, batch_codes)
+            
+            if success:
+                all_data.update(data)
+                self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只")
+            else:
+                self.logger.warning(f"第 {batch_num} 批次失败: {error}")
+                result['errors'].append(f"批次 {batch_num}: {error}")
+        
+        result['success'] = True
+        result['success_count'] = len(all_data)
+        result['failed_count'] = len(codes) - len(all_data)
+        result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+        self.sync_status['last_market_data_sync'] = datetime.now()
+        self.logger.success(f"同步实时行情成功，成功 {len(all_data)}/{len(codes)} 只，耗时 {result['duration_seconds']:.2f}秒")
         
         return result
     
