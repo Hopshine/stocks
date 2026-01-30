@@ -3,6 +3,7 @@
 """
 import pandas as pd
 import numpy as np
+import time
 from typing import List, Dict, Optional, Callable
 from datetime import datetime, timedelta
 from .data_fetcher import StockDataFetcher
@@ -18,6 +19,7 @@ class StockStrategy:
             self.fetcher = BaoStockDataFetcher()
         else:
             self.fetcher = fetcher
+        self.request_delay = 0.5  # 请求间隔（秒）
     
     def filter(self, stocks_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -76,6 +78,8 @@ class MACDStrategy(StockStrategy):
                     })
             except Exception as e:
                 continue
+            finally:
+                time.sleep(self.request_delay)
         
         return pd.DataFrame(results)
 
@@ -118,6 +122,8 @@ class RSIStrategy(StockStrategy):
                     })
             except Exception:
                 continue
+            finally:
+                time.sleep(self.request_delay)
         
         return pd.DataFrame(results)
 
@@ -161,6 +167,8 @@ class BollingerStrategy(StockStrategy):
                     })
             except Exception:
                 continue
+            finally:
+                time.sleep(self.request_delay)
         
         return pd.DataFrame(results)
 
@@ -207,6 +215,8 @@ class GoldenCrossStrategy(StockStrategy):
                     })
             except Exception:
                 continue
+            finally:
+                time.sleep(self.request_delay)
         
         return pd.DataFrame(results)
 
@@ -372,6 +382,8 @@ class MultiIndicatorStrategy(StockStrategy):
                     })
             except Exception:
                 continue
+            finally:
+                time.sleep(self.request_delay)
         
         df_result = pd.DataFrame(results)
         if not df_result.empty:

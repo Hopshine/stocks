@@ -150,20 +150,39 @@ class StockScheduler:
             self.task_status[task_key]['duration'] = (datetime.now() - start_time).total_seconds()
             self.task_status[task_key]['running'] = False
     
+    def _run_initial_sync(self):
+        """执行初始同步任务（启动时立即执行）"""
+        self._log('info', "📊 开始执行初始同步...")
+        
+        # 同步股票列表
+        self._run_sync_task("同步股票列表", self.sync_service.sync_stock_list, 'stock_list')
+        
+        # 同步实时行情
+        self._run_sync_task("同步实时行情", self.sync_service.sync_market_data, 'market_data')
+        
+        # 同步指数数据
+        self._run_sync_task("同步指数数据", self.sync_service.sync_index_data, 'index_data')
+        
+        self._log('success', "✅ 初始同步完成！")
+        self._log('info', f"📅 下次同步时间: 股票列表 {self.task_status['stock_list']['next_run'].strftime('%H:%M:%S')}, "
+                        f"实时行情 {self.task_status['market_data']['next_run'].strftime('%H:%M:%S')}, "
+                        f"指数数据 {self.task_status['index_data']['next_run'].strftime('%H:%M:%S')}")
+    
     def _scheduler_loop(self):
         """调度器主循环"""
         self._log('info', "📅 调度器已启动")
         
-        # 初始化下次运行时间
-        self.task_status['stock_list']['next_run'] = self._calculate_next_run(
-            self.config['stock_list_interval_hours'] * 60
-        )
-        self.task_status['market_data']['next_run'] = self._calculate_next_run(
-            self.config['market_data_interval_minutes']
-        )
-        self.task_status['index_data']['next_run'] = self._calculate_next_run(
-            self.config['index_data_interval_minutes']
-        )
+        # 初始化下次运行时间（设置为立即运行）
+        self.task_status['stock_list']['next_run'] = datetime.now()
+        self.task_status['market_data']['next_run'] = datetime.now()
+        self.task_status['index_data']['next_run'] = datetime.now()
+        
+        # 立即执行一次同步任务（不阻塞启动）
+        self._log('info', "🚀 执行初始同步任务...")
+        
+        # 在后台线程中执行初始同步
+        init_thread = threading.Thread(target=self._run_initial_sync, daemon=True)
+        init_thread.start()
         
         while self.running:
             try:
