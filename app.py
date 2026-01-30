@@ -66,7 +66,11 @@ def api_stock_list():
         spot_data_dict = {}
         if hasattr(fetcher, 'cache') and fetcher.cache:
             for code in sample_codes:
+                # 先尝试获取1小时内的缓存
                 cached_data = fetcher.cache.get_spot_data(code, max_age_hours=1)
+                # 如果没有或过期，尝试获取更长时间的缓存（24小时）
+                if cached_data is None:
+                    cached_data = fetcher.cache.get_spot_data(code, max_age_hours=24)
                 if cached_data is not None:
                     spot_data_dict[code] = cached_data
         
@@ -132,7 +136,11 @@ def api_stock_list():
             # 从缓存中获取该股票的实时行情
             spot = {}
             if hasattr(fetcher, 'cache') and fetcher.cache:
+                # 先尝试获取1小时内的缓存
                 spot = fetcher.cache.get_spot_data(code, max_age_hours=1) or {}
+                # 如果没有或过期，尝试获取更长时间的缓存（24小时）
+                if not spot:
+                    spot = fetcher.cache.get_spot_data(code, max_age_hours=24) or {}
             
             price = 0
             change_pct = 0
