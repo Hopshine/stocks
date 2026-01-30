@@ -250,6 +250,7 @@ class BaoStockDataFetcher:
         2. 只查找一次最近交易日
         3. 批量获取时添加适当的错误处理和延迟
         4. 实时保存到缓存
+        5. 连接被关闭时自动重连和冷却
         
         Args:
             codes: 股票代码列表 (如: ['000001', '600000'])
@@ -291,23 +292,27 @@ class BaoStockDataFetcher:
                 for i in range(10):  # 减少搜索范围到10天
                     date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
                     
-                    rs = bs.query_history_k_data_plus(
-                        test_code,
-                        "date",
-                        start_date=date,
-                        end_date=date,
-                        frequency="d",
-                        adjustflag="3"
-                    )
-                    
-                    if rs.error_code == '0':
-                        data_list = []
-                        while (rs.error_code == '0') & rs.next():
-                            data_list.append(rs.get_row_data())
-                        if data_list:
-                            trading_date = date
-                            print(f"找到最近交易日: {trading_date} (使用测试码 {test_code})")
-                            break
+                    try:
+                        rs = bs.query_history_k_data_plus(
+                            test_code,
+                            "date",
+                            start_date=date,
+                            end_date=date,
+                            frequency="d",
+                            adjustflag="3"
+                        )
+                        
+                        if rs.error_code == '0':
+                            data_list = []
+                            while (rs.error_code == '0') & rs.next():
+                                data_list.append(rs.get_row_data())
+                            if data_list:
+                                trading_date = date
+                                print(f"找到最近交易日: {trading_date} (使用测试码 {test_code})")
+                                break
+                    except Exception as e:
+                        print(f"查找交易日时出错: {e}")
+                        continue
                 if trading_date:
                     break
             
@@ -320,6 +325,10 @@ class BaoStockDataFetcher:
             success_count = 0
             total_count = len(codes_need_fetch)
             batch_start_time = time.time()
+            
+            # 连接错误计数器
+            connection_errors = 0
+            max_connection_errors = 5
             
             for idx, code in enumerate(codes_need_fetch):
                 if code in result:
@@ -344,6 +353,20 @@ class BaoStockDataFetcher:
                     )
                     
                     if rs.error_code != '0':
+                        # 检查是否是连接错误
+                        if '连接' in rs.error_msg or '网络' in rs.error_msg:
+                            connection_errors += 1
+                            print(f"⚠️ 连接错误 {connection_errors}/{max_connection_errors}: {rs.error_msg}")
+                            
+                            # 如果连接错误太多，增加冷却时间
+                            if connection_errors >= max_connection_errors:
+                                print(f"⏸️ 连接错误过多，冷却5秒后重试...")
+                                time.sleep(5)
+                                connection_errors = 0
+                            else:
+                                time.sleep(1)  # 短暂冷却
+                            continue
+                        
                         # API错误，记录但继续
                         if idx % 50 == 0:  # 每50只记录一次，避免日志过多
                             print(f"API错误 {code}: {rs.error_msg}")
@@ -372,6 +395,7 @@ class BaoStockDataFetcher:
                         }
                         result[code] = spot_data
                         success_count += 1
+                        connection_errors = 0  # 成功时重置错误计数
                         
                         # 实时保存到缓存
                         if self.enable_cache and self.cache:
@@ -381,6 +405,20 @@ class BaoStockDataFetcher:
                         pass
                     
                 except Exception as e:
+                    error_msg = str(e)
+                    # 检查是否是连接被关闭的错误
+                    if '10054' in error_msg or '远程主机' in error_msg or 'Connection' in error_msg:
+                        connection_errors += 1
+                        print(f"⚠️ 连接被服务器关闭 {connection_errors}/{max_connection_errors}: {code}")
+                        
+                        if connection_errors >= max_connection_errors:
+                            print(f"⏸️ 服务器限制连接，冷却10秒...")
+                            time.sleep(10)
+                            connection_errors = 0
+                        else:
+                            time.sleep(2)  # 短暂冷却
+                        continue
+                    
                     # 单个股票出错不影响其他股票
                     if idx % 50 == 0:
                         print(f"获取 {code} 出错: {e}")
@@ -394,14 +432,27 @@ class BaoStockDataFetcher:
                     print(f"进度: {idx + 1}/{total_count} ({(idx + 1) / total_count * 100:.1f}%), "
                           f"速度: {rate:.1f}只/秒, 预估剩余: {remaining:.0f}秒")
                 
-                # 添加微小延迟，避免请求过快被限制
-                # 每10只股票延迟一次，减少总延迟时间
-                if (idx + 1) % 10 == 0:
-                    time.sleep(0.01)  # 10毫秒延迟
+                # 增加请求间隔 - 每只股票之间添加延迟
+                # 根据连接错误情况动态调整延迟
+                base_delay = 0.05  # 基础延迟50毫秒
+                if connection_errors > 0:
+                    base_delay = 0.2  # 有错误时增加延迟到200毫秒
+                
+                if (idx + 1) % 5 == 0:  # 每5只股票延迟一次
+                    time.sleep(base_delay)
             
             elapsed_total = time.time() - batch_start_time
-            print(f"批量获取完成，成功 {success_count}/{total_count} 只股票，"
-                  f"耗时 {elapsed_total:.1f}秒，速度 {total_count/elapsed_total:.1f}只/秒")
+            success_rate = success_count / total_count * 100 if total_count > 0 else 0
+            avg_speed = total_count / elapsed_total if elapsed_total > 0 else 0
+            
+            print(f"批量获取完成，成功 {success_count}/{total_count} 只股票 ({success_rate:.1f}%)，"
+                  f"耗时 {elapsed_total:.1f}秒，平均速度 {avg_speed:.1f}只/秒")
+            
+            # 如果有大量失败，提示用户
+            if success_rate < 50:
+                print(f"⚠️ 警告: 成功率仅 {success_rate:.1f}%，可能是服务器限制了请求频率")
+                print(f"💡 建议: 1. 增加缓存时间 2. 减少同步频率 3. 分多次小批量同步")
+            
             return result
             
         except Exception as e:
@@ -495,10 +546,11 @@ class BaoStockDataFetcher:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         adjust: str = "qfq",
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        max_retries: int = 3
     ) -> pd.DataFrame:
         """
-        获取股票历史K线数据（带缓存）
+        获取股票历史K线数据（带缓存和重试机制）
         
         Args:
             code: 股票代码
@@ -507,99 +559,124 @@ class BaoStockDataFetcher:
             end_date: 结束日期 (YYYY-MM-DD格式), 默认为今天
             adjust: 复权类型 (qfq-前复权, hfq-后复权, 不复权)
             days: 获取天数（如果指定，将覆盖start_date）
+            max_retries: 最大重试次数
             
         Returns:
             DataFrame包含OHLCV数据
         """
-        try:
-            # 如果指定了days，计算start_date
-            if days is not None:
-                start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-            
-            # 标准化代码格式
-            if '.' not in code:
-                if code.startswith('6'):
-                    code = f'sh.{code}'
-                else:
-                    code = f'sz.{code}'
-            
-            # 设置默认日期
-            if end_date is None:
-                end_date = datetime.now().strftime("%Y-%m-%d")
-            if start_date is None:
-                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-            
-            # 尝试从缓存获取
-            if self.enable_cache and self.cache:
-                cached_data = self.cache.get_historical_data(
-                    code, start_date, end_date, max_age_hours=1
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # 如果指定了days，计算start_date
+                if days is not None:
+                    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                
+                # 标准化代码格式
+                if '.' not in code:
+                    if code.startswith('6'):
+                        code = f'sh.{code}'
+                    else:
+                        code = f'sz.{code}'
+                
+                # 设置默认日期
+                if end_date is None:
+                    end_date = datetime.now().strftime("%Y-%m-%d")
+                if start_date is None:
+                    start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+                
+                # 尝试从缓存获取
+                if self.enable_cache and self.cache:
+                    cached_data = self.cache.get_historical_data(
+                        code, start_date, end_date, max_age_hours=24
+                    )
+                    if cached_data is not None:
+                        print(f"从缓存获取股票 {code} 历史数据，共 {len(cached_data)} 条")
+                        return cached_data
+                
+                # 设置复权标志
+                adjustflag_map = {
+                    'qfq': '3',  # 前复权
+                    'hfq': '2',  # 后复权
+                    '': '1'      # 不复权
+                }
+                adjustflag = adjustflag_map.get(adjust, '3')
+                
+                # 设置频率
+                frequency_map = {
+                    'daily': 'd',
+                    'weekly': 'w',
+                    'monthly': 'm'
+                }
+                frequency = frequency_map.get(period, 'd')
+                
+                # 获取数据
+                rs = bs.query_history_k_data_plus(
+                    code,
+                    "date,code,open,high,low,close,volume,amount,pctChg,turn",
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency=frequency,
+                    adjustflag=adjustflag
                 )
-                if cached_data is not None:
-                    print(f"从缓存获取股票 {code} 历史数据，共 {len(cached_data)} 条")
-                    return cached_data
-            
-            # 设置复权标志
-            adjustflag_map = {
-                'qfq': '3',  # 前复权
-                'hfq': '2',  # 后复权
-                '': '1'      # 不复权
-            }
-            adjustflag = adjustflag_map.get(adjust, '3')
-            
-            # 设置频率
-            frequency_map = {
-                'daily': 'd',
-                'weekly': 'w',
-                'monthly': 'm'
-            }
-            frequency = frequency_map.get(period, 'd')
-            
-            # 获取数据
-            rs = bs.query_history_k_data_plus(
-                code,
-                "date,code,open,high,low,close,volume,amount,pctChg,turn",
-                start_date=start_date,
-                end_date=end_date,
-                frequency=frequency,
-                adjustflag=adjustflag
-            )
-            
-            if rs.error_code != '0':
-                print(f"获取股票 {code} 历史数据失败: {rs.error_msg}")
-                return pd.DataFrame()
-            
-            data_list = []
-            while (rs.error_code == '0') & rs.next():
-                data_list.append(rs.get_row_data())
-            
-            if not data_list:
-                return pd.DataFrame()
-            
-            result = pd.DataFrame(data_list, columns=rs.fields)
-            
-            # 标准化列名
-            result.columns = [
-                'date', 'code', 'open', 'high', 'low', 'close',
-                'volume', 'amount', 'pct_change', 'turnover'
-            ]
-            
-            # 转换数据类型
-            result['date'] = pd.to_datetime(result['date'])
-            for col in ['open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change', 'turnover']:
-                result[col] = pd.to_numeric(result[col], errors='coerce')
-            
-            result.set_index('date', inplace=True)
-            
-            # 保存到缓存
-            if self.enable_cache and self.cache:
-                self.cache.save_historical_data(code, result)
-                print(f"已保存股票 {code} 历史数据到缓存，共 {len(result)} 条")
-            
-            return result
-            
-        except Exception as e:
-            print(f"获取股票 {code} 历史数据失败: {e}")
-            return pd.DataFrame()
+                
+                if rs.error_code != '0':
+                    print(f"获取股票 {code} 历史数据失败: {rs.error_msg}")
+                    return pd.DataFrame()
+                
+                data_list = []
+                while (rs.error_code == '0') & rs.next():
+                    data_list.append(rs.get_row_data())
+                
+                if not data_list:
+                    return pd.DataFrame()
+                
+                result = pd.DataFrame(data_list, columns=rs.fields)
+                
+                # 标准化列名
+                result.columns = [
+                    'date', 'code', 'open', 'high', 'low', 'close',
+                    'volume', 'amount', 'pct_change', 'turnover'
+                ]
+                
+                # 转换数据类型
+                result['date'] = pd.to_datetime(result['date'])
+                for col in ['open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change', 'turnover']:
+                    result[col] = pd.to_numeric(result[col], errors='coerce')
+                
+                result.set_index('date', inplace=True)
+                
+                # 保存到缓存
+                if self.enable_cache and self.cache:
+                    self.cache.save_historical_data(code, result)
+                    print(f"已保存股票 {code} 历史数据到缓存，共 {len(result)} 条")
+                
+                return result
+                
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                
+                # 检查是否是网络错误
+                is_network_error = any(keyword in error_str.lower() for keyword in [
+                    'utf-8', 'codec', 'decompress', 'invalid', 'connection',
+                    '10054', '10053', '远程主机', '网络', '接收数据',
+                    'socket', 'timeout', 'reset'
+                ])
+                
+                if is_network_error and attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 指数退避
+                    print(f"⚠️ 网络错误 (尝试 {attempt + 1}/{max_retries}): {error_str}")
+                    print(f"   等待 {wait_time} 秒后重试...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"获取股票 {code} 历史数据失败: {e}")
+                    return pd.DataFrame()
+        
+        # 所有重试都失败
+        print(f"获取股票 {code} 历史数据失败，已重试 {max_retries} 次: {last_error}")
+        return pd.DataFrame()
     
     def get_index_data(self, index_code: str = "000001") -> pd.DataFrame:
         """

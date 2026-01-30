@@ -18,10 +18,10 @@ DB_CONFIG = {
 SCHEDULER_CONFIG = {
     # 股票列表更新间隔（小时）
     'stock_list_interval_hours': 24,
-    # 实时行情更新间隔（分钟）
-    'market_data_interval_minutes': 5,
+    # 实时行情更新间隔（分钟）- 增加间隔避免触发服务器限制
+    'market_data_interval_minutes': 60,  # 改为60分钟（原来是5分钟）
     # 指数数据更新间隔（分钟）
-    'index_data_interval_minutes': 5,
+    'index_data_interval_minutes': 30,   # 改为30分钟（原来是5分钟）
     # 是否启用自动更新
     'auto_start': True,
 }
