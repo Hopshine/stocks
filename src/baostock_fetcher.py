@@ -245,12 +245,19 @@ class BaoStockDataFetcher:
         """
         批量获取多只股票的实时行情（优化版，支持大规模数据）
         
+        优化点：
+        1. 先批量检查缓存，减少API调用
+        2. 只查找一次最近交易日
+        3. 批量获取时添加适当的错误处理和延迟
+        4. 实时保存到缓存
+        
         Args:
             codes: 股票代码列表 (如: ['000001', '600000'])
             
         Returns:
             字典，key为股票代码，value为行情数据
         """
+        import time
         try:
             result = {}
             
@@ -258,54 +265,61 @@ class BaoStockDataFetcher:
                 return result
             
             # 步骤1: 批量获取缓存中有效的数据
+            cache_hits = 0
             if self.enable_cache and self.cache:
                 for code in codes:
                     cached_data = self.cache.get_spot_data(code, max_age_hours=1)
                     if cached_data is not None:
                         result[code] = cached_data
+                        cache_hits += 1
             
             # 步骤2: 找出需要从API获取的股票
             codes_need_fetch = [code for code in codes if code not in result]
             
             if not codes_need_fetch:
-                print(f"所有 {len(codes)} 只股票的实时行情都来自缓存")
+                print(f"所有 {len(codes)} 只股票的实时行情都来自缓存（命中 {cache_hits} 只）")
                 return result
             
-            print(f"需要从API获取 {len(codes_need_fetch)} 只股票的实时行情")
+            print(f"需要从API获取 {len(codes_need_fetch)} 只股票的实时行情（缓存命中 {cache_hits} 只）")
             
-            # 步骤3: 优化日期查找策略 - 先找到最近的交易日，再批量获取
+            # 步骤3: 优化日期查找策略 - 只查找一次最近交易日
             trading_date = None
-            for i in range(30):
-                date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-                # 测试一个股票是否在这个日期有数据
-                test_code = codes_need_fetch[0]
-                code_with_prefix = test_code if '.' in test_code else (f'sh.{test_code}' if test_code.startswith('6') else f'sz.{test_code}')
-                
-                rs = bs.query_history_k_data_plus(
-                    code_with_prefix,
-                    "date",
-                    start_date=date,
-                    end_date=date,
-                    frequency="d",
-                    adjustflag="3"
-                )
-                
-                if rs.error_code == '0':
-                    data_list = []
-                    while (rs.error_code == '0') & rs.next():
-                        data_list.append(rs.get_row_data())
-                    if data_list:
-                        trading_date = date
-                        print(f"找到最近交易日: {trading_date}")
-                        break
+            # 使用上海主板的一只大盘股作为测试（600519茅台通常每天都有数据）
+            test_codes = ['sh.600519', 'sh.600036', 'sz.000001', 'sh.600000']
+            
+            for test_code in test_codes:
+                for i in range(10):  # 减少搜索范围到10天
+                    date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+                    
+                    rs = bs.query_history_k_data_plus(
+                        test_code,
+                        "date",
+                        start_date=date,
+                        end_date=date,
+                        frequency="d",
+                        adjustflag="3"
+                    )
+                    
+                    if rs.error_code == '0':
+                        data_list = []
+                        while (rs.error_code == '0') & rs.next():
+                            data_list.append(rs.get_row_data())
+                        if data_list:
+                            trading_date = date
+                            print(f"找到最近交易日: {trading_date} (使用测试码 {test_code})")
+                            break
+                if trading_date:
+                    break
             
             if not trading_date:
-                print("未找到有效交易日，使用今天日期")
-                trading_date = datetime.now().strftime('%Y-%m-%d')
+                # 如果找不到，使用昨天或今天的日期
+                trading_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                print(f"未找到有效交易日，使用默认日期: {trading_date}")
             
-            # 步骤4: 在找到的交易日批量获取所有股票数据
+            # 步骤4: 批量获取所有股票数据，添加延迟避免请求过快
             success_count = 0
             total_count = len(codes_need_fetch)
+            batch_start_time = time.time()
             
             for idx, code in enumerate(codes_need_fetch):
                 if code in result:
@@ -319,51 +333,75 @@ class BaoStockDataFetcher:
                     else:
                         code_with_prefix = f'sz.{code}'
                 
-                rs = bs.query_history_k_data_plus(
-                    code_with_prefix,
-                    "date,code,open,high,low,close,volume,amount,pctChg,turn",
-                    start_date=trading_date,
-                    end_date=trading_date,
-                    frequency="d",
-                    adjustflag="3"
-                )
-                
-                if rs.error_code != '0':
+                try:
+                    rs = bs.query_history_k_data_plus(
+                        code_with_prefix,
+                        "date,code,open,high,low,close,volume,amount,pctChg,turn",
+                        start_date=trading_date,
+                        end_date=trading_date,
+                        frequency="d",
+                        adjustflag="3"
+                    )
+                    
+                    if rs.error_code != '0':
+                        # API错误，记录但继续
+                        if idx % 50 == 0:  # 每50只记录一次，避免日志过多
+                            print(f"API错误 {code}: {rs.error_msg}")
+                        continue
+                    
+                    data_list = []
+                    while (rs.error_code == '0') & rs.next():
+                        data_list.append(rs.get_row_data())
+                    
+                    if data_list:
+                        df = pd.DataFrame(data_list, columns=rs.fields)
+                        raw_data = df.iloc[0].to_dict()
+                        
+                        # 转换为中文键名（与get_stock_spot保持一致）
+                        spot_data = {
+                            '日期': raw_data.get('date', ''),
+                            '股票代码': raw_data.get('code', ''),
+                            '开盘价': self._safe_float(raw_data.get('open')),
+                            '最高价': self._safe_float(raw_data.get('high')),
+                            '最低价': self._safe_float(raw_data.get('low')),
+                            '最新价': self._safe_float(raw_data.get('close')),
+                            '成交量': self._safe_float(raw_data.get('volume')),
+                            '成交额': self._safe_float(raw_data.get('amount')),
+                            '涨跌幅': self._safe_float(raw_data.get('pctChg')),
+                            '换手率': self._safe_float(raw_data.get('turn'))
+                        }
+                        result[code] = spot_data
+                        success_count += 1
+                        
+                        # 实时保存到缓存
+                        if self.enable_cache and self.cache:
+                            self.cache.save_spot_data(code, spot_data)
+                    else:
+                        # 该股票在这个日期没有数据，可能是停牌
+                        pass
+                    
+                except Exception as e:
+                    # 单个股票出错不影响其他股票
+                    if idx % 50 == 0:
+                        print(f"获取 {code} 出错: {e}")
                     continue
                 
-                data_list = []
-                while (rs.error_code == '0') & rs.next():
-                    data_list.append(rs.get_row_data())
-                
-                if data_list:
-                    df = pd.DataFrame(data_list, columns=rs.fields)
-                    raw_data = df.iloc[0].to_dict()
-                    
-                    # 转换为中文键名（与get_stock_spot保持一致）
-                    spot_data = {
-                        '日期': raw_data.get('date', ''),
-                        '股票代码': raw_data.get('code', ''),
-                        '开盘价': self._safe_float(raw_data.get('open')),
-                        '最高价': self._safe_float(raw_data.get('high')),
-                        '最低价': self._safe_float(raw_data.get('low')),
-                        '最新价': self._safe_float(raw_data.get('close')),
-                        '成交量': self._safe_float(raw_data.get('volume')),
-                        '成交额': self._safe_float(raw_data.get('amount')),
-                        '涨跌幅': self._safe_float(raw_data.get('pctChg')),
-                        '换手率': self._safe_float(raw_data.get('turn'))
-                    }
-                    result[code] = spot_data
-                    success_count += 1
-                    
-                    # 保存到缓存
-                    if self.enable_cache and self.cache:
-                        self.cache.save_spot_data(code, spot_data)
-                
-                # 每100只股票显示一次进度
+                # 每100只股票显示一次进度和预估时间
                 if (idx + 1) % 100 == 0:
-                    print(f"进度: {idx + 1}/{total_count} ({(idx + 1) / total_count * 100:.1f}%)")
+                    elapsed = time.time() - batch_start_time
+                    rate = (idx + 1) / elapsed if elapsed > 0 else 0
+                    remaining = (total_count - idx - 1) / rate if rate > 0 else 0
+                    print(f"进度: {idx + 1}/{total_count} ({(idx + 1) / total_count * 100:.1f}%), "
+                          f"速度: {rate:.1f}只/秒, 预估剩余: {remaining:.0f}秒")
+                
+                # 添加微小延迟，避免请求过快被限制
+                # 每10只股票延迟一次，减少总延迟时间
+                if (idx + 1) % 10 == 0:
+                    time.sleep(0.01)  # 10毫秒延迟
             
-            print(f"批量获取完成，成功 {success_count}/{total_count} 只股票")
+            elapsed_total = time.time() - batch_start_time
+            print(f"批量获取完成，成功 {success_count}/{total_count} 只股票，"
+                  f"耗时 {elapsed_total:.1f}秒，速度 {total_count/elapsed_total:.1f}只/秒")
             return result
             
         except Exception as e:

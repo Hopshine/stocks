@@ -242,7 +242,11 @@ class DataSyncService:
             
             if success:
                 all_data.update(data)
-                self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只")
+                # 立即保存到缓存
+                if self.cache:
+                    for code, spot_data in data.items():
+                        self.cache.save_spot_data(code, spot_data)
+                self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只，已缓存")
             else:
                 self.logger.warning(f"第 {batch_num} 批次失败: {error}")
                 result['errors'].append(f"批次 {batch_num}: {error}")
@@ -274,7 +278,11 @@ class DataSyncService:
                 
                 if success:
                     all_data.update(data)
-                    self.logger.success(f"重试第 {retry_batch_num} 批次完成，成功 {len(data)}/{len(retry_codes)} 只")
+                    # 立即保存重试成功的数据到缓存
+                    if self.cache:
+                        for code, spot_data in data.items():
+                            self.cache.save_spot_data(code, spot_data)
+                    self.logger.success(f"重试第 {retry_batch_num} 批次完成，成功 {len(data)}/{len(retry_codes)} 只，已缓存")
                 else:
                     self.logger.warning(f"重试第 {retry_batch_num} 批次失败: {error}")
                     result['errors'].append(f"重试批次 {retry_batch_num}: {error}")
