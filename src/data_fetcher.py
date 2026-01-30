@@ -216,6 +216,75 @@ class StockDataFetcher:
             print(f"获取股票 {code} 实时行情失败: {e}")
             return {}
     
+    def get_all_spot_data(self) -> pd.DataFrame:
+        """
+        获取全市场实时行情（一次API调用获取所有股票）
+        使用 stock_zh_a_spot_em() 替代分批获取，大幅提升速度
+        
+        Returns:
+            DataFrame包含所有股票的实时数据
+        """
+        try:
+            print("使用 stock_zh_a_spot_em() 获取全市场数据...")
+            df = self._retry_fetch(ak.stock_zh_a_spot_em)
+            
+            if df is None or df.empty:
+                print("获取全市场数据失败或返回空")
+                return pd.DataFrame()
+            
+            print(f"成功获取 {len(df)} 只股票数据")
+            return df
+            
+        except Exception as e:
+            print(f"获取全市场实时行情失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
+    
+    def get_daily_snapshot(self) -> pd.DataFrame:
+        """
+        获取每日行情快照（结构化数据，用于缓存）
+        整合实时数据，生成标准格式的每日数据
+        
+        Returns:
+            DataFrame包含: code, name, price, change_pct, volume, amount, pe, pb等
+        """
+        df = self.get_all_spot_data()
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+        # 列名映射（东方财富原始列名 -> 标准列名）
+        columns_map = {
+            '代码': 'code',
+            '名称': 'name',
+            '最新价': 'price',
+            '涨跌幅': 'change_pct',
+            '涨跌额': 'change',
+            '成交量': 'volume',
+            '成交额': 'amount',
+            '振幅': 'amplitude',
+            '最高': 'high',
+            '最低': 'low',
+            '今开': 'open',
+            '昨收': 'pre_close',
+            '市盈率-动态': 'pe',
+            '市净率': 'pb',
+            '总市值': 'market_cap',
+            '流通市值': 'float_cap',
+            '换手率': 'turnover'
+        }
+        
+        # 只重命名存在的列
+        existing_map = {k: v for k, v in columns_map.items() if k in df.columns}
+        result = df.rename(columns=existing_map)
+        
+        # 提取存在的列
+        wanted_cols = list(existing_map.values())
+        available_cols = [c for c in wanted_cols if c in result.columns]
+        
+        return result[available_cols].copy()
+    
     def get_historical_data(
         self,
         code: str,

@@ -75,17 +75,24 @@ class SyncLogger:
 class DataSyncService:
     """股票数据同步服务"""
     
-    def __init__(self, cache_path: str = "data/stock_cache.db"):
+    def __init__(self, cache_path: str = "data/stock_cache.db", use_akshare: bool = False):
         """
         初始化数据同步服务
         
         Args:
             cache_path: 缓存数据库路径
+            use_akshare: 是否使用akshare（更快），False则使用baostock
         """
         self.cache = StockDataCache(cache_path)
         self.fetcher = None
+        self.use_akshare = use_akshare
         self.logger = SyncLogger()
-        self.config = API_CONFIG['baostock']
+        
+        if use_akshare:
+            self.config = API_CONFIG['akshare']
+        else:
+            self.config = API_CONFIG['baostock']
+        
         self.retry_times = self.config['retry_times']
         self.retry_interval = self.config['retry_interval_seconds']
         
@@ -98,11 +105,17 @@ class DataSyncService:
             'errors': []
         }
     
-    def _get_fetcher(self) -> Optional[BaoStockDataFetcher]:
+    def _get_fetcher(self):
         """获取数据获取器（懒加载）"""
         if self.fetcher is None:
             try:
-                self.fetcher = BaoStockDataFetcher()
+                if self.use_akshare:
+                    from src.data_fetcher import StockDataFetcher
+                    self.fetcher = StockDataFetcher()
+                    self.logger.info("使用akshare数据源（东方财富，速度更快）")
+                else:
+                    self.fetcher = BaoStockDataFetcher()
+                    self.logger.info("使用baostock数据源")
             except Exception as e:
                 self.logger.error(f"初始化数据获取器失败: {e}")
                 return None
@@ -181,7 +194,7 @@ class DataSyncService:
     
     def sync_market_data(self, codes: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        同步实时行情数据
+        同步实时行情数据（使用一次API调用获取所有股票）
         
         Args:
             codes: 股票代码列表，如果为None则同步所有股票
@@ -211,86 +224,87 @@ class DataSyncService:
             self.logger.end_task(task_name, 'failed', str(result))
             return result
         
-        # 如果没有指定股票代码，获取所有股票
-        if codes is None:
+        if self.use_akshare:
+            # akshare: 使用一次API调用获取所有数据（1秒内完成）
             try:
-                stock_list = fetcher.get_stock_list()
-                # 同步所有股票（全量覆盖）
-                codes = stock_list['code'].tolist()
-                self.logger.info(f"准备同步 {len(codes)} 只股票的实时行情")
+                self.logger.info("使用 stock_zh_a_spot_em() 一次性获取全市场数据...")
+                
+                df = fetcher.get_daily_snapshot()
+                
+                if df.empty:
+                    result['errors'].append("获取市场数据失败")
+                    result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+                    self.logger.end_task(task_name, 'failed', str(result))
+                    return result
+                
+                # 逐条保存到缓存
+                if self.cache:
+                    saved_count = 0
+                    for _, row in df.iterrows():
+                        code = row.get('code')
+                        if code:
+                            spot_data = row.to_dict()
+                            try:
+                                self.cache.save_spot_data(code, spot_data)
+                                saved_count += 1
+                            except Exception as save_error:
+                                self.logger.warning(f"保存 {code} 数据失败: {save_error}")
+                    
+                    self.logger.success(f"保存 {saved_count}/{len(df)} 只股票数据到缓存")
+                
+                result['success'] = True
+                result['total_stocks'] = len(df)
+                result['success_count'] = len(df)
+                result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+                self.sync_status['last_market_data_sync'] = datetime.now()
+                self.logger.success(f"同步实时行情成功，共 {len(df)} 只股票，耗时 {result['duration_seconds']:.2f}秒")
+                
             except Exception as e:
-                result['errors'].append(f"获取股票列表失败: {e}")
+                result['errors'].append(str(e))
                 result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
                 self.logger.end_task(task_name, 'failed', str(result))
-                return result
-        
-        result['total_stocks'] = len(codes)
-        
-        # 分批次同步，避免超时和性能问题
-        batch_size = 500  # 每批500只
-        all_data = {}
-        total_batches = (len(codes) + batch_size - 1) // batch_size
-        
-        for i in range(0, len(codes), batch_size):
-            batch_codes = codes[i:i + batch_size]
-            batch_num = i // batch_size + 1
+        else:
+            # baostock: 使用分批获取方法（原有逻辑）
+            if codes is None:
+                try:
+                    stock_list = fetcher.get_stock_list()
+                    codes = stock_list['code'].tolist()
+                    self.logger.info(f"准备同步 {len(codes)} 只股票的实时行情")
+                except Exception as e:
+                    result['errors'].append(f"获取股票列表失败: {e}")
+                    result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+                    self.logger.end_task(task_name, 'failed', str(result))
+                    return result
             
-            self.logger.info(f"正在同步第 {batch_num}/{total_batches} 批次，共 {len(batch_codes)} 只股票")
+            result['total_stocks'] = len(codes)
             
-            # 批量获取行情数据
-            success, data, error = self._retry_sync(fetcher.get_batch_spot_data, batch_codes)
+            batch_size = 500
+            all_data = {}
+            total_batches = (len(codes) + batch_size - 1) // batch_size
             
-            if success:
-                all_data.update(data)
-                # 立即保存到缓存
-                if self.cache:
-                    for code, spot_data in data.items():
-                        self.cache.save_spot_data(code, spot_data)
-                self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只，已缓存")
-            else:
-                self.logger.warning(f"第 {batch_num} 批次失败: {error}")
-                result['errors'].append(f"批次 {batch_num}: {error}")
-        
-        result['success'] = True
-        result['success_count'] = len(all_data)
-        result['failed_count'] = len(codes) - len(all_data)
-        result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
-        self.sync_status['last_market_data_sync'] = datetime.now()
-        self.logger.success(f"同步实时行情成功，成功 {len(all_data)}/{len(codes)} 只，耗时 {result['duration_seconds']:.2f}秒")
-        
-        # 对失败的股票进行重试
-        failed_codes = [code for code in codes if code not in all_data]
-        if failed_codes:
-            self.logger.info(f"开始重试 {len(failed_codes)} 只失败的股票...")
-            
-            # 分批次重试失败的股票（每批100只）
-            retry_batch_size = 100
-            retry_batches = (len(failed_codes) + retry_batch_size - 1) // retry_batch_size
-            
-            for i in range(0, len(failed_codes), retry_batch_size):
-                retry_codes = failed_codes[i:i + retry_batch_size]
-                retry_batch_num = i // retry_batch_size + 1
+            for i in range(0, len(codes), batch_size):
+                batch_codes = codes[i:i + batch_size]
+                batch_num = i // batch_size + 1
                 
-                self.logger.info(f"正在重试第 {retry_batch_num}/{retry_batches} 批次，共 {len(retry_codes)} 只股票")
+                self.logger.info(f"正在同步第 {batch_num}/{total_batches} 批次，共 {len(batch_codes)} 只股票")
                 
-                # 批量获取行情数据（使用更长的重试次数）
-                success, data, error = self._retry_sync(fetcher.get_batch_spot_data, retry_codes)
+                success, data, error = self._retry_sync(fetcher.get_batch_spot_data, batch_codes)
                 
                 if success:
                     all_data.update(data)
-                    # 立即保存重试成功的数据到缓存
                     if self.cache:
                         for code, spot_data in data.items():
                             self.cache.save_spot_data(code, spot_data)
-                    self.logger.success(f"重试第 {retry_batch_num} 批次完成，成功 {len(data)}/{len(retry_codes)} 只，已缓存")
+                    self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只")
                 else:
-                    self.logger.warning(f"重试第 {retry_batch_num} 批次失败: {error}")
-                    result['errors'].append(f"重试批次 {retry_batch_num}: {error}")
+                    result['errors'].append(f"批次 {batch_num}: {error}")
             
-            # 更新最终结果
+            result['success'] = True
             result['success_count'] = len(all_data)
             result['failed_count'] = len(codes) - len(all_data)
-            self.logger.info(f"重试完成，最终成功 {len(all_data)}/{len(codes)} 只股票")
+            result['duration_seconds'] = (datetime.now() - start_time).total_seconds()
+            self.sync_status['last_market_data_sync'] = datetime.now()
+            self.logger.success(f"同步实时行情完成，成功 {len(all_data)}/{len(codes)} 只，耗时 {result['duration_seconds']:.2f}秒")
         
         return result
     
