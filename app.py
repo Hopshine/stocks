@@ -29,8 +29,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'stock-analyzer-2024'
 Bootstrap(app)
 
-# 全局数据获取器 - 使用BaoStockDataFetcher
-fetcher = BaoStockDataFetcher()
+# 全局数据获取器 - 使用BaoStockDataFetcher，共享缓存
+fetcher = BaoStockDataFetcher(cache_path="data/stock_cache.db")
 visualizer = StockVisualizer()
 
 
