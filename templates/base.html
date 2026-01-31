@@ -104,8 +104,16 @@
             background: white;
             border-radius: 12px;
             padding: 1.5rem;
+            margin: 0.5rem;
             text-align: center;
             border-left: 4px solid var(--secondary-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
         }
         
         .metric-value {
@@ -180,7 +188,28 @@
             background: white;
             border-radius: 15px;
             padding: 1.5rem;
+            margin-bottom: 1.5rem;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .chart-container canvas {
+            height: 500px !important;
+            width: 100% !important;
+        }
+        
+        /* 调整图表容器内的边距 */
+        .chart-container > div {
+            margin: 0;
+        }
+        
+        /* 调整标题和按钮组的间距 */
+        .chart-container h5 {
+            margin-bottom: 1.5rem;
+        }
+        
+        /* 调整图例位置 */
+        .chart-container .chartjs-legend {
+            margin-top: 1rem;
         }
         
         .loading {
@@ -265,7 +294,10 @@
     </footer>
 
     <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
-    <!-- Chart.js is not used directly - charts are generated server-side with matplotlib -->
+    <!-- Chart.js -->
+    <script src="{{ url_for('static', filename='chartjs/js/chart.js') }}"></script>
+    <!-- Chart.js Zoom plugin -->
+    <script src="{{ url_for('static', filename='chartjs/js/chartjs-plugin-zoom.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

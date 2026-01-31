@@ -6,6 +6,7 @@ A股分析系统 - Web界面 (Flask)
 import io
 import base64
 import json
+import pandas as pd
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_bootstrap import Bootstrap
@@ -285,7 +286,7 @@ def api_technical_analysis(code):
 
 @app.route('/api/chart/<code>')
 def api_chart(code):
-    """生成图表API"""
+    """生成图表数据API"""
     try:
         days = request.args.get('days', 90, type=int)
         chart_type = request.args.get('type', 'technical')  # technical, kline, volume
@@ -295,56 +296,37 @@ def api_chart(code):
         if df.empty:
             return jsonify({'success': False, 'error': '未找到股票数据'})
         
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # 计算均线
+        analyzer = TechnicalAnalyzer(df)
+        ma5 = analyzer.ma(5)
+        ma10 = analyzer.ma(10)
+        ma20 = analyzer.ma(20)
         
-        if chart_type == 'kline':
-            # 简化版K线图
-            ax.plot(df.index, df['close'], label='收盘价', linewidth=2)
-            ax.fill_between(df.index, df['low'], df['high'], alpha=0.3, label='价格区间')
-            ax.set_title(f'{code} 价格走势')
-            
-        elif chart_type == 'volume':
-            # 成交量图
-            colors = ['red' if df['close'].iloc[i] >= df['open'].iloc[i] 
-                     else 'green' for i in range(len(df))]
-            ax.bar(df.index, df['volume'], color=colors, alpha=0.7)
-            ax.set_title(f'{code} 成交量')
-            
-        else:  # technical
-            # 价格+均线
-            ax.plot(df.index, df['close'], label='收盘价', linewidth=2)
-            
-            # 计算均线
-            analyzer = TechnicalAnalyzer(df)
-            ma5 = analyzer.ma(5)
-            ma10 = analyzer.ma(10)
-            ma20 = analyzer.ma(20)
-            
-            ax.plot(df.index, ma5, label='MA5', alpha=0.8)
-            ax.plot(df.index, ma10, label='MA10', alpha=0.8)
-            ax.plot(df.index, ma20, label='MA20', alpha=0.8)
-            
-            ax.set_title(f'{code} 技术分析')
-            ax.legend()
+        # 将NaN值转换为None，确保JSON序列化正确
+        def convert_nan_to_none(data_list):
+            return [float(x) if not pd.isna(x) else None for x in data_list]
         
-        ax.set_xlabel('日期')
-        ax.set_ylabel('价格/成交量')
-        ax.grid(True, alpha=0.3)
-        
-        # 旋转x轴标签
-        for label in ax.xaxis.get_ticklabels():
-            label.set_rotation(45)
-        
-        plt.tight_layout()
-        
-        # 转换为base64
-        img_base64 = fig_to_base64(fig)
+        # 准备数据
+        chart_data = {
+            'dates': df.index.strftime('%Y-%m-%d').tolist(),
+            'close': convert_nan_to_none(df['close'].tolist()),
+            'open': convert_nan_to_none(df['open'].tolist()),
+            'high': convert_nan_to_none(df['high'].tolist()),
+            'low': convert_nan_to_none(df['low'].tolist()),
+            'volume': convert_nan_to_none(df['volume'].tolist()),
+            'ma5': convert_nan_to_none(ma5.tolist()),
+            'ma10': convert_nan_to_none(ma10.tolist()),
+            'ma20': convert_nan_to_none(ma20.tolist())
+        }
         
         return jsonify({
             'success': True,
-            'chart': img_base64
+            'data': chart_data,
+            'code': code
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 
