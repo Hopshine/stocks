@@ -278,7 +278,7 @@ class DataSyncService:
             
             result['total_stocks'] = len(codes)
             
-            batch_size = 500
+            batch_size = 200  # 减少批次大小，避免触发服务器限制
             all_data = {}
             total_batches = (len(codes) + batch_size - 1) // batch_size
             
@@ -298,6 +298,12 @@ class DataSyncService:
                     self.logger.success(f"第 {batch_num} 批次完成，成功 {len(data)}/{len(batch_codes)} 只")
                 else:
                     result['errors'].append(f"批次 {batch_num}: {error}")
+                
+                # 增加批次之间的冷却时间，避免服务器限制
+                if batch_num < total_batches:
+                    cooling_time = 15  # 批次之间冷却15秒
+                    self.logger.info(f"批次 {batch_num} 完成，冷却 {cooling_time} 秒后开始下一批次...")
+                    time.sleep(cooling_time)
             
             result['success'] = True
             result['success_count'] = len(all_data)

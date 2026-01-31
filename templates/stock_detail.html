@@ -128,17 +128,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadStockInfo() {
     try {
+        document.getElementById('stockName').textContent = '加载中...';
         const response = await fetch(`/api/stock_info/${stockCode}`);
         const result = await response.json();
         
         if (result.success) {
             displayInfo(result);
         } else {
+            console.error('Failed to load stock info:', result.error);
             document.getElementById('stockName').textContent = result.error || '未知股票';
+            
+            // 显示错误信息和重试按钮
+            document.getElementById('realtimeSection').innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger text-center">
+                        <h4 class="alert-heading">数据加载失败</h4>
+                        <p>${result.error || '未找到股票数据'}</p>
+                        <hr>
+                        <p class="mb-0">
+                            <button class="btn btn-primary" onclick="loadStockInfo()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>重试
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Failed to load stock info:', error);
         document.getElementById('stockName').textContent = '加载失败';
+        
+        // 显示网络错误和重试按钮
+        document.getElementById('realtimeSection').innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger text-center">
+                    <h4 class="alert-heading">网络错误</h4>
+                    <p>无法连接到服务器，请检查网络连接</p>
+                    <hr>
+                    <p class="mb-0">
+                        <button class="btn btn-primary" onclick="loadStockInfo()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>重试
+                        </button>
+                    </p>
+                </div>
+            </div>
+        `;
     }
 }
 
@@ -186,18 +220,57 @@ async function loadChart(days) {
         }
     });
     
+    // 显示加载中状态
+    document.getElementById('chartImage').style.display = 'none';
+    document.getElementById('chartPlaceholder').innerHTML = `
+        <div class="spinner mb-3"></div>
+        <p>加载图表中...</p>
+    `;
+    document.getElementById('chartPlaceholder').style.display = 'block';
+    
     try {
+        console.log('Loading chart for', stockCode, 'with', days, 'days');
         const response = await fetch(`/api/chart/${stockCode}?days=${days}&type=technical`);
+        console.log('Chart API response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
+        console.log('Chart API result:', result);
         
         if (result.success && result.chart) {
             document.getElementById('chartImage').src = 'data:image/png;base64,' + result.chart;
             document.getElementById('chartImage').style.display = 'block';
             document.getElementById('chartPlaceholder').style.display = 'none';
+        } else {
+            console.error('Failed to load chart:', result.error);
+            document.getElementById('chartPlaceholder').innerHTML = `
+                <div class="text-danger">
+                    <i class="bi bi-exclamation-circle mb-3" style="font-size: 3rem;"></i>
+                    <p>图表加载失败</p>
+                    <p class="text-sm">${result.error || '未找到图表数据'}</p>
+                    <hr>
+                    <button class="btn btn-primary" onclick="loadChart(${days})">
+                        <i class="bi bi-arrow-clockwise me-2"></i>重试
+                    </button>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Failed to load chart:', error);
-        document.getElementById('chartPlaceholder').innerHTML = '<p class="text-danger">加载图表失败</p>';
+        document.getElementById('chartPlaceholder').innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-wifi-off mb-3" style="font-size: 3rem;"></i>
+                <p>网络错误</p>
+                <p class="text-sm">无法连接到服务器</p>
+                <hr>
+                <button class="btn btn-primary" onclick="loadChart(${days})">
+                    <i class="bi bi-arrow-clockwise me-2"></i>重试
+                </button>
+            </div>
+        `;
     }
 }
 

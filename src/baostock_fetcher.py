@@ -116,14 +116,22 @@ class BaoStockDataFetcher:
                 
                 # 过滤出正常交易的股票（status=1）
                 # status=1: 正常交易, status=0: 停牌, 其他状态可能表示退市等
-                a_stocks = a_stocks[a_stocks['tradeStatus'] == '1'].copy()
+                # 注意：某些情况下API可能不返回tradeStatus字段，需要检查
+                if 'tradeStatus' in a_stocks.columns:
+                    a_stocks = a_stocks[a_stocks['tradeStatus'] == '1'].copy()
+                else:
+                    # 如果没有tradeStatus字段，记录警告并继续使用所有A股股票
+                    print(f"警告: API未返回tradeStatus字段，将使用所有A股股票（共{len(a_stocks)}只）")
                 
                 # 标准化列名
-                a_stocks = a_stocks.rename(columns={
+                rename_dict = {
                     'code': 'code',
                     'code_name': 'name',
                     'tradeStatus': 'status'
-                })
+                }
+                # 只重命名实际存在的列
+                rename_dict = {k: v for k, v in rename_dict.items() if k in a_stocks.columns}
+                a_stocks = a_stocks.rename(columns=rename_dict)
                 
                 # 添加市场标识
                 a_stocks['market'] = a_stocks['code'].apply(
@@ -502,21 +510,29 @@ class BaoStockDataFetcher:
                             result[code] = cached_data
                             continue
                     
-                    rs = bs.query_history_k_data_plus(
-                        code_with_prefix,
-                        "date,code,open,high,low,close,volume,amount,pctChg",
-                        start_date=date,
-                        end_date=date,
-                        frequency="d",
-                        adjustflag="3"
-                    )
+                    try:
+                        rs = bs.query_history_k_data_plus(
+                            code_with_prefix,
+                            "date,code,open,high,low,close,volume,amount,pctChg",
+                            start_date=date,
+                            end_date=date,
+                            frequency="d",
+                            adjustflag="3"
+                        )
+                    except Exception as e:
+                        print(f"获取指数 {code} 数据时出错: {e}")
+                        continue
                     
                     if rs.error_code != '0':
                         continue
                     
-                    data_list = []
-                    while (rs.error_code == '0') & rs.next():
-                        data_list.append(rs.get_row_data())
+                    try:
+                        data_list = []
+                        while (rs.error_code == '0') & rs.next():
+                            data_list.append(rs.get_row_data())
+                    except Exception as e:
+                        print(f"解析指数 {code} 数据时出错: {e}")
+                        continue
                     
                     if data_list:
                         df = pd.DataFrame(data_list, columns=rs.fields)
