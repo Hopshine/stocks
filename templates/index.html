@@ -8,15 +8,21 @@
             <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
         </h1>
         <p class="lead text-muted mb-4">专业的股票数据分析与选股工具</p>
-        <div class="search-box mx-auto position-relative" style="max-width: 600px;">
-            <i class="bi bi-search"></i>
-            <input type="text" class="form-control form-control-lg" id="searchInput" 
-                   placeholder="输入股票代码或名称 (如: 000001)" onkeypress="handleEnter(event)" oninput="handleSearchInput(event)">
-            <div id="searchResults" class="search-results dropdown-menu" style="display: none;"></div>
+        <div class="mx-auto" style="max-width: 600px; position: relative;">
+            <div class="input-group input-group-lg">
+                <span class="input-group-addon bg-white border-right-0" style="border-radius: 25px 0 0 25px;">
+                    <i class="bi bi-search text-gray-400"></i>
+                </span>
+                <input type="text" class="form-control border-left-0" id="searchInput" 
+                       placeholder="输入股票代码或名称 (如: 000001)" onkeypress="handleEnter(event)" oninput="handleSearchInput(event)">
+                <span class="input-group-btn">
+                    <button class="btn btn-primary" onclick="searchStock()" style="border-radius: 0 25px 25px 0;">
+                        <i class="bi bi-search me-1"></i>查询股票
+                    </button>
+                </span>
+            </div>
+            <div id="searchResults" class="search-results" style="display: none;"></div>
         </div>
-        <button class="btn btn-primary btn-lg mt-3" onclick="searchStock()">
-            <i class="bi bi-search me-2"></i>查询股票
-        </button>
     </div>
 </div>
 
@@ -208,9 +214,13 @@ function searchStock() {
 
 // 点击页面其他地方时隐藏搜索结果
 document.addEventListener('click', function(event) {
-    const searchBox = document.querySelector('.search-box');
-    if (!searchBox.contains(event.target)) {
-        document.getElementById('searchResults').style.display = 'none';
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    if (searchInput && searchResults) {
+        const searchContainer = searchInput.closest('.mx-auto');
+        if (searchContainer && !searchContainer.contains(event.target)) {
+            searchResults.style.display = 'none';
+        }
     }
 });
 

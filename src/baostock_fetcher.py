@@ -584,16 +584,16 @@ class BaoStockDataFetcher:
         
         for attempt in range(max_retries):
             try:
-                # 如果指定了days，计算start_date
-                if days is not None:
-                    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-                
                 # 标准化代码格式
                 if '.' not in code:
                     if code.startswith('6'):
                         code = f'sh.{code}'
                     else:
                         code = f'sz.{code}'
+                
+                # 如果指定了days，计算start_date
+                if days is not None:
+                    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
                 
                 # 设置默认日期
                 if end_date is None:

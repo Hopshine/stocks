@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}A股分析系统{% endblock %}</title>
-    <link href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-icons/font/bootstrap-icons.css') }}">
     <style>
         :root {
@@ -23,12 +23,29 @@
         
         .navbar {
             background: linear-gradient(135deg, var(--primary-color) 0%, #1a252f 100%);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 0;
         }
         
         .navbar-brand {
             font-weight: 700;
             font-size: 1.5rem;
+            color: white !important;
+        }
+        
+        .navbar-nav > li > a {
+            color: rgba(255,255,255,0.9);
+            padding: 15px 15px;
+            transition: color 0.3s ease;
+        }
+        
+        .navbar-nav > li > a:hover {
+            color: white;
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+        
+        .navbar-toggle .icon-bar {
+            background-color: white;
         }
         
         .card {
@@ -253,37 +270,42 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <nav class="navbar navbar-inverse navbar-fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="/">
-                <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbarNav">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/">
+                    <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
+                </a>
+            </div>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/"><i class="bi bi-house me-1"></i>首页</a>
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="/" class="nav-link"><i class="bi bi-house me-1"></i>首页</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/analysis"><i class="bi bi-graph-up me-1"></i>技术分析</a>
+                    <li>
+                        <a href="/analysis" class="nav-link"><i class="bi bi-graph-up me-1"></i>技术分析</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/screening"><i class="bi bi-funnel me-1"></i>选股策略</a>
+                    <li>
+                        <a href="/screening" class="nav-link"><i class="bi bi-funnel me-1"></i>选股策略</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/sectors"><i class="bi bi-grid me-1"></i>行业板块</a>
+                    <li>
+                        <a href="/sectors" class="nav-link"><i class="bi bi-grid me-1"></i>行业板块</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/compare"><i class="bi bi-bar-chart-line me-1"></i>股票对比</a>
+                    <li>
+                        <a href="/compare" class="nav-link"><i class="bi bi-bar-chart-line me-1"></i>股票对比</a>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <main class="container my-4">
+    <main class="container" style="padding-top: 70px;">
         {% block content %}{% endblock %}
     </main>
 
@@ -293,7 +315,10 @@
         </div>
     </footer>
 
-    <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <!-- jQuery (Bootstrap 3 requires jQuery) -->
+    <script src="{{ url_for('static', filename='vendor/js/jquery.min.js') }}"></script>
+    <!-- Bootstrap JavaScript -->
+    <script src="{{ url_for('static', filename='vendor/js/bootstrap.min.js') }}"></script>
     <!-- Chart.js -->
     <script src="{{ url_for('static', filename='chartjs/js/chart.js') }}"></script>
     <!-- Chart.js Zoom plugin -->

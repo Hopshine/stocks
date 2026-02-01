@@ -541,6 +541,12 @@ def api_sync_logs():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/favicon.ico')
+def favicon():
+    """提供favicon.ico"""
+    return send_file('static/favicon.ico', mimetype='image/x-icon')
+
+
 if __name__ == '__main__':
     # 启动时自动启动调度器
     print("=" * 60)
