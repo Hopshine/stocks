@@ -50,12 +50,14 @@
         
         .card {
             border: none;
-            border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .card-hover {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         
-        .card:hover {
+        .card-hover:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
@@ -63,7 +65,6 @@
         .card-header {
             background: linear-gradient(135deg, var(--secondary-color) 0%, #2980b9 100%);
             color: white;
-            border-radius: 15px 15px 0 0 !important;
             font-weight: 600;
             padding: 1rem 1.5rem;
         }
@@ -279,13 +280,6 @@
         .signal-buy { background-color: var(--danger-color); color: white; }
         .signal-sell { background-color: var(--success-color); color: white; }
         .signal-neutral { background-color: #95a5a6; color: white; }
-        
-        footer {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 2rem 0;
-            margin-top: 3rem;
-        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -325,13 +319,13 @@
         </div>
     </nav>
 
-    <main class="container" style="padding-top: 70px;">
+    <main class="container" style="padding-top: 70px; padding-bottom: 80px;">
         {% block content %}{% endblock %}
     </main>
 
-    <footer>
+    <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(135deg, var(--primary-color) 0%, #1a252f 100%); padding: 1rem 0; border-top: 1px solid rgba(255, 255, 255, 0.1); z-index: 1000; opacity: 1; visibility: visible; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);">
         <div class="container text-center">
-            <p class="mb-0">A股分析系统 &copy; 2024 | 数据仅供参考，投资有风险</p>
+            <p class="mb-0" style="color: rgba(255, 255, 255, 0.9); font-size: 0.95rem; font-weight: 400; letter-spacing: 0.5px;">A股分析系统 © 2024 | 数据仅供参考，投资有风险</p>
         </div>
     </footer>
 

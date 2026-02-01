@@ -2,13 +2,13 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="row mb-8">
-    <div class="col-12 text-center py-8">
-        <div class="mb-6">
-            <h1 class="display-4 fw-bold text-primary mb-3" style="text-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);">
+<div class="row mb-8" style="margin-top: 2rem;">
+    <div class="col-12 text-center py-10">
+        <div class="mb-8">
+            <h1 class="display-4 fw-bold text-primary mb-4" style="text-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);">
                 <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
             </h1>
-            <p class="lead text-muted mb-6">专业的股票数据分析与选股工具</p>
+            <p class="lead text-muted mb-8">专业的股票数据分析与选股工具</p>
         </div>
         <div class="text-center" style="width: 100%; position: relative; display: inline-block; max-width: 600px;">
             <div class="input-group input-group-lg" style="width: 100%; box-shadow: 0 5px 30px rgba(52, 152, 219, 0.2);">
@@ -29,26 +29,26 @@
 </div>
 
 <!-- Quick Stats -->
-<div class="row mb-8">
-    <div class="col-md-3 mb-4">
+<div class="row mb-10" style="margin-left: 15px; margin-right: 15px;">
+    <div class="col-md-3 mb-4 pr-3 pl-3">
         <div class="metric-card h-100" style="background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.05)); border: 1px solid rgba(52, 152, 219, 0.2); border-radius: 15px; padding: 2rem; box-shadow: 0 3px 15px rgba(0, 0, 0, 0.05);">
             <div class="metric-value text-primary" id="totalStocks" style="font-size: 2rem; font-weight: bold;">-</div>
             <div class="metric-label" style="margin-top: 0.5rem;">股票总数</div>
         </div>
     </div>
-    <div class="col-md-3 mb-4">
+    <div class="col-md-3 mb-4 pr-3 pl-3">
         <div class="metric-card h-100" style="background: linear-gradient(135deg, rgba(39, 174, 96, 0.1), rgba(39, 174, 96, 0.05)); border: 1px solid rgba(39, 174, 96, 0.2); border-radius: 15px; padding: 2rem; box-shadow: 0 3px 15px rgba(0, 0, 0, 0.05);">
             <div class="metric-value text-success" id="upCount" style="font-size: 2rem; font-weight: bold;">-</div>
             <div class="metric-label" style="margin-top: 0.5rem;">上涨家数</div>
         </div>
     </div>
-    <div class="col-md-3 mb-4">
+    <div class="col-md-3 mb-4 pr-3 pl-3">
         <div class="metric-card h-100" style="background: linear-gradient(135deg, rgba(231, 76, 60, 0.1), rgba(231, 76, 60, 0.05)); border: 1px solid rgba(231, 76, 60, 0.2); border-radius: 15px; padding: 2rem; box-shadow: 0 3px 15px rgba(0, 0, 0, 0.05);">
             <div class="metric-value text-danger" id="downCount" style="font-size: 2rem; font-weight: bold;">-</div>
             <div class="metric-label" style="margin-top: 0.5rem;">下跌家数</div>
         </div>
     </div>
-    <div class="col-md-3 mb-4">
+    <div class="col-md-3 mb-4 pr-3 pl-3">
         <div class="metric-card h-100" style="background: linear-gradient(135deg, rgba(243, 156, 18, 0.1), rgba(243, 156, 18, 0.05)); border: 1px solid rgba(243, 156, 18, 0.2); border-radius: 15px; padding: 2rem; box-shadow: 0 3px 15px rgba(0, 0, 0, 0.05);">
             <div class="metric-value text-warning" id="avgChange" style="font-size: 2rem; font-weight: bold;">-</div>
             <div class="metric-label" style="margin-top: 0.5rem;">平均涨幅</div>
@@ -57,9 +57,9 @@
 </div>
 
 <!-- Market Overview -->
-<div class="row mb-8">
+<div class="row mb-8" style="margin-top: 3rem; margin-left: 15px; margin-right: 15px;">
     <div class="col-md-6 mb-6">
-        <div class="card h-100" style="border-radius: 15px; box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);">
+        <div class="card h-100" style="border-radius: 15px; box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1); margin-bottom: 2rem;">
             <div class="card-header d-flex justify-content-between align-items-center" style="border-radius: 15px 15px 0 0;">
                 <span><i class="bi bi-trophy me-2"></i>涨幅排行</span>
                 <span class="badge bg-light text-dark">TOP 10</span>
@@ -84,7 +84,7 @@
         </div>
     </div>
     <div class="col-md-6 mb-6">
-        <div class="card h-100" style="border-radius: 15px; box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);">
+        <div class="card h-100" style="border-radius: 15px; box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1); margin-bottom: 2rem;">
             <div class="card-header d-flex justify-content-between align-items-center" style="border-radius: 15px 15px 0 0;">
                 <span><i class="bi bi-arrow-down-circle me-2"></i>跌幅排行</span>
                 <span class="badge bg-light text-dark">TOP 10</span>
@@ -111,41 +111,38 @@
 </div>
 
 <!-- Quick Actions -->
-<div class="row mb-8">
-    <div class="col-12">
-        <div class="card" style="border-radius: 15px; box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);">
-            <div class="card-header" style="border-radius: 15px 15px 0 0;">
-                <i class="bi bi-lightning me-2"></i>快捷操作
+<div class="row mb-8" style="margin-left: 15px; margin-right: 15px;">
+    <div class="col-md-3 mb-4 pr-3 pl-3">
+        <a href="/analysis" class="text-decoration-none">
+            <div class="h-100 text-center" style="border-radius: 15px; padding: 2rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.2); background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.05)); cursor: pointer;">
+                <i class="bi bi-graph-up text-primary" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <span class="text-primary" style="font-weight: 600;">技术分析</span>
             </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3 mb-6">
-                        <a href="/analysis" class="btn btn-outline-primary btn-lg w-100" style="border-radius: 10px; padding: 2rem 1rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(52, 152, 219, 0.1);">
-                            <i class="bi bi-graph-up mb-2 d-block fs-3"></i>
-                            <span style="font-weight: 600;">技术分析</span>
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-6">
-                        <a href="/screening" class="btn btn-outline-success btn-lg w-100" style="border-radius: 10px; padding: 2rem 1rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(39, 174, 96, 0.1);">
-                            <i class="bi bi-funnel mb-2 d-block fs-3"></i>
-                            <span style="font-weight: 600;">智能选股</span>
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-6">
-                        <a href="/sectors" class="btn btn-outline-info btn-lg w-100" style="border-radius: 10px; padding: 2rem 1rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(52, 152, 219, 0.1);">
-                            <i class="bi bi-grid mb-2 d-block fs-3"></i>
-                            <span style="font-weight: 600;">行业板块</span>
-                        </a>
-                    </div>
-                    <div class="col-md-3 mb-6">
-                        <a href="/compare" class="btn btn-outline-warning btn-lg w-100" style="border-radius: 10px; padding: 2rem 1rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(243, 156, 18, 0.1);">
-                            <i class="bi bi-bar-chart-line mb-2 d-block fs-3"></i>
-                            <span style="font-weight: 600;">股票对比</span>
-                        </a>
-                    </div>
-                </div>
+        </a>
+    </div>
+    <div class="col-md-3 mb-4 pr-3 pl-3">
+        <a href="/screening" class="text-decoration-none">
+            <div class="h-100 text-center" style="border-radius: 15px; padding: 2rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(39, 174, 96, 0.1); border: 1px solid rgba(39, 174, 96, 0.2); background: linear-gradient(135deg, rgba(39, 174, 96, 0.1), rgba(39, 174, 96, 0.05)); cursor: pointer;">
+                <i class="bi bi-funnel text-success" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <span class="text-success" style="font-weight: 600;">智能选股</span>
             </div>
-        </div>
+        </a>
+    </div>
+    <div class="col-md-3 mb-4 pr-3 pl-3">
+        <a href="/sectors" class="text-decoration-none">
+            <div class="h-100 text-center" style="border-radius: 15px; padding: 2rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.2); background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.05)); cursor: pointer;">
+                <i class="bi bi-grid text-info" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <span class="text-info" style="font-weight: 600;">行业板块</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 mb-4 pr-3 pl-3">
+        <a href="/compare" class="text-decoration-none">
+            <div class="h-100 text-center" style="border-radius: 15px; padding: 2rem; transition: all 0.3s ease; box-shadow: 0 3px 15px rgba(243, 156, 18, 0.1); border: 1px solid rgba(243, 156, 18, 0.2); background: linear-gradient(135deg, rgba(243, 156, 18, 0.1), rgba(243, 156, 18, 0.05)); cursor: pointer;">
+                <i class="bi bi-bar-chart-line text-warning" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <span class="text-warning" style="font-weight: 600;">股票对比</span>
+            </div>
+        </a>
     </div>
 </div>
 {% endblock %}
