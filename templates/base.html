@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}A股分析系统{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
     <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-icons/font/bootstrap-icons.css') }}">
     <style>
@@ -32,20 +33,16 @@
             color: white !important;
         }
         
-        .navbar-nav > li > a {
+        .navbar-nav .nav-link {
             color: rgba(255,255,255,0.9);
-            padding: 15px 15px;
+            padding: 0.5rem 1rem;
             transition: color 0.3s ease;
         }
         
-        .navbar-nav > li > a:hover {
+        .navbar-nav .nav-link:hover {
             color: white;
             background-color: rgba(255,255,255,0.1);
             border-radius: 4px;
-        }
-        
-        .navbar-toggle .icon-bar {
-            background-color: white;
         }
         
         .card {
@@ -138,6 +135,8 @@
             font-size: 2rem;
             font-weight: 700;
             color: var(--primary-color);
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
         }
         
         .metric-label {
@@ -280,39 +279,161 @@
         .signal-buy { background-color: var(--danger-color); color: white; }
         .signal-sell { background-color: var(--success-color); color: white; }
         .signal-neutral { background-color: #95a5a6; color: white; }
+        
+        /* 首页专用样式 */
+        .metric-card-primary {
+            border-left: 4px solid var(--secondary-color) !important;
+            background: linear-gradient(135deg, rgba(52, 152, 219, 0.05), rgba(52, 152, 219, 0.02)) !important;
+            margin: 0 !important;
+            padding: 2rem !important;
+        }
+        
+        .metric-card-success {
+            border-left: 4px solid var(--success-color) !important;
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.05), rgba(39, 174, 96, 0.02)) !important;
+            margin: 0 !important;
+            padding: 2rem !important;
+        }
+        
+        .metric-card-danger {
+            border-left: 4px solid var(--danger-color) !important;
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.05), rgba(231, 76, 60, 0.02)) !important;
+            margin: 0 !important;
+            padding: 2rem !important;
+        }
+        
+        .metric-card-warning {
+            border-left: 4px solid var(--warning-color) !important;
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.05), rgba(243, 156, 18, 0.02)) !important;
+            margin: 0 !important;
+            padding: 2rem !important;
+        }
+        
+        .metric-card-primary .metric-value,
+        .metric-card-success .metric-value,
+        .metric-card-danger .metric-value,
+        .metric-card-warning .metric-value {
+            font-size: 2.5rem !important;
+        }
+        
+        .metric-card-primary .metric-label,
+        .metric-card-success .metric-label,
+        .metric-card-danger .metric-label,
+        .metric-card-warning .metric-label {
+            color: #6c757d !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            text-transform: none !important;
+            letter-spacing: 0 !important;
+        }
+        
+        .quick-action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+        
+        .quick-action-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        .quick-action-card i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        
+        .quick-action-card span {
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: block;
+        }
+        
+        .quick-action-primary {
+            border-left: 4px solid var(--secondary-color);
+            background: linear-gradient(135deg, rgba(52, 152, 219, 0.05), rgba(52, 152, 219, 0.02));
+        }
+        
+        .quick-action-primary i,
+        .quick-action-primary span {
+            color: var(--secondary-color);
+        }
+        
+        .quick-action-success {
+            border-left: 4px solid var(--success-color);
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.05), rgba(39, 174, 96, 0.02));
+        }
+        
+        .quick-action-success i,
+        .quick-action-success span {
+            color: var(--success-color);
+        }
+        
+        .quick-action-info {
+            border-left: 4px solid #17a2b8;
+            background: linear-gradient(135deg, rgba(23, 162, 184, 0.05), rgba(23, 162, 184, 0.02));
+        }
+        
+        .quick-action-info i,
+        .quick-action-info span {
+            color: #17a2b8;
+        }
+        
+        .quick-action-warning {
+            border-left: 4px solid var(--warning-color);
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.05), rgba(243, 156, 18, 0.02));
+        }
+        
+        .quick-action-warning i,
+        .quick-action-warning span {
+            color: var(--warning-color);
+        }
+        
+        /* 统一卡片样式 */
+        .card {
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            border-radius: 0;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-inverse navbar-fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: linear-gradient(135deg, var(--primary-color) 0%, #1a252f 100%);">
         <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbarNav">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a class="navbar-brand" href="/">
-                    <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
-                </a>
-            </div>
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-graph-up-arrow me-2"></i>A股分析系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="nav navbar-nav navbar-right">
-                    <li>
-                        <a href="/" class="nav-link"><i class="bi bi-house me-1"></i>首页</a>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="bi bi-house me-1"></i>首页</a>
                     </li>
-                    <li>
-                        <a href="/analysis" class="nav-link"><i class="bi bi-graph-up me-1"></i>技术分析</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/analysis"><i class="bi bi-graph-up me-1"></i>技术分析</a>
                     </li>
-                    <li>
-                        <a href="/screening" class="nav-link"><i class="bi bi-funnel me-1"></i>选股策略</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/screening"><i class="bi bi-funnel me-1"></i>选股策略</a>
                     </li>
-                    <li>
-                        <a href="/sectors" class="nav-link"><i class="bi bi-grid me-1"></i>行业板块</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/sectors"><i class="bi bi-grid me-1"></i>行业板块</a>
                     </li>
-                    <li>
-                        <a href="/compare" class="nav-link"><i class="bi bi-bar-chart-line me-1"></i>股票对比</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/compare"><i class="bi bi-bar-chart-line me-1"></i>股票对比</a>
                     </li>
                 </ul>
             </div>
@@ -329,10 +450,8 @@
         </div>
     </footer>
 
-    <!-- jQuery (Bootstrap 3 requires jQuery) -->
-    <script src="{{ url_for('static', filename='vendor/js/jquery.min.js') }}"></script>
-    <!-- Bootstrap JavaScript -->
-    <script src="{{ url_for('static', filename='vendor/js/bootstrap.min.js') }}"></script>
+    <!-- Bootstrap 5 JS Bundle (includes Popper) -->
+    <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <!-- Chart.js -->
     <script src="{{ url_for('static', filename='chartjs/js/chart.js') }}"></script>
     <!-- Chart.js Zoom plugin -->
